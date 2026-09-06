@@ -1,0 +1,24 @@
+display_name = "Go2 Policy Example (unitree_rl_lab)"
+
+[package]
+version = "0.2.0"
+category = "Simulation"
+title = "Unitree Go2 RL Policy Example"
+description = "Runs a unitree_rl_lab-trained Go2 locomotion policy in pure Isaac Sim, in the style of the built-in Spot Quadruped example. Robot/environment USD and policy checkpoint are configurable from Edit > Preferences > Go2 Policy Example."
+repository = ""
+keywords = ["isaac", "robot", "quadruped", "go2", "unitree", "policy"]
+readme = "docs/README.md"
+icon = "data/icon.png"
+writeTarget.kit = true
+
+[dependencies]
+"isaacsim.core.api" = {}
+"isaacsim.examples.browser" = {}
+"isaacsim.examples.interactive" = {}
+"isaacsim.robot.policy.examples" = {}
+"omni.kit.uiapp" = {}
+"omni.kit.window.filepicker" = {}
+"omni.kit.window.preferences" = {}
+
+[[python.module]]
+name = "go2_policy.example"
