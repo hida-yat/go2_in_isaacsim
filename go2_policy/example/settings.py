@@ -19,6 +19,7 @@ _ROOT = "/persistent/exts/go2_policy.example"
 _EXT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 _DEFAULT_POLICY_PATH = os.path.join(_EXT_ROOT, "data", "Policies", "Go2", "policy.pt")
 _DEFAULT_POLICY_ENV_PATH = os.path.join(_EXT_ROOT, "data", "Policies", "Go2", "env.yaml")
+_DEFAULT_POLICY_DEPLOY_PATH = os.path.join(_EXT_ROOT, "data", "Policies", "Go2", "deploy.yaml")
 
 # Bundled bare Go2 USD (no sensors). Point "robot_usd_path" at a
 # sensor-equipped variant (e.g. a go2_with_sensors.usd containing
@@ -35,6 +36,7 @@ DEFAULTS = {
     "environment_usd_path": _DEFAULT_ENVIRONMENT_USD_PATH,
     "policy_path": _DEFAULT_POLICY_PATH,
     "policy_env_path": _DEFAULT_POLICY_ENV_PATH,
+    "policy_deploy_path": _DEFAULT_POLICY_DEPLOY_PATH,
 }
 
 # Order + display metadata for the settings window.
@@ -51,6 +53,14 @@ FIELDS = [
         "policy_env_path",
         "Policy env.yaml",
         "The Isaac Lab params/env.yaml dumped alongside the checkpoint (defines joint gains/defaults).",
+        [("YAML", "*.yaml")],
+    ),
+    (
+        "policy_deploy_path",
+        "Policy deploy.yaml",
+        "unitree_rl_lab's params/deploy.yaml dumped alongside the checkpoint. Defines the observation term"
+        " list/order/scales and the action scale/offset, so the observation vector is built to match this"
+        " checkpoint automatically instead of being hardcoded.",
         [("YAML", "*.yaml")],
     ),
 ]
