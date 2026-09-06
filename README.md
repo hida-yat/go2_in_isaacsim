@@ -1,4 +1,4 @@
-# go2_policy.example
+# go2_in_isaacsim
 
 A pure-Isaac-Sim Isaac Sim extension that runs a [unitree_rl_lab](https://github.com/unitreerobotics/unitree_rl_lab)
 (Isaac Lab)-trained Unitree Go2 locomotion policy, in the same style as the
@@ -14,7 +14,7 @@ See [`docs/README.md`](docs/README.md) for what's inside and how to configure it
 Clone (or copy) this directory into your Isaac Sim install's `exts/` folder:
 
 ```bash
-git clone <this-repo-url> "$HOME/isaacsim/exts/go2_policy.example"
+git clone <this-repo-url> "$HOME/isaacsim/exts/go2_in_isaacsim"
 ```
 
 (Replace `$HOME/isaacsim` with your actual Isaac Sim install path if different.
@@ -24,7 +24,7 @@ into the install tree.)
 
 Then in Isaac Sim:
 
-1. `Window > Extensions`, search `go2_policy`, enable `go2_policy.example`
+1. `Window > Extensions`, search `go2_in_isaacsim`, enable it
    (toggle **Autoload** to have it enabled automatically next time).
 2. `Isaac Examples > Policy > Go2` → **Load** → **Play**.
 3. Drive with arrow keys / numpad (see the example's overview panel for the

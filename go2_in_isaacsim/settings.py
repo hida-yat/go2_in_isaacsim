@@ -11,7 +11,7 @@ import os
 
 import carb.settings
 
-_ROOT = "/persistent/exts/go2_policy.example"
+_ROOT = "/persistent/exts/go2_in_isaacsim"
 
 # Everything under data/ ships inside this extension (git repo) so it works
 # out of the box on a fresh checkout, with no external paths and no

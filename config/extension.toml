@@ -21,4 +21,4 @@ writeTarget.kit = true
 "omni.kit.window.preferences" = {}
 
 [[python.module]]
-name = "go2_policy.example"
+name = "go2_in_isaacsim"
