@@ -54,6 +54,11 @@ class Go2PolicyPreferences(PreferenceBuilder):
                         self._build_bool_row(key, label, tooltip)
                     for key, label, tooltip in settings.ROS2_TEXT_FIELDS:
                         self._build_text_row(key, label, tooltip)
+            with self.add_frame("Mid-360 Lidar"):
+                with ui.VStack(height=0, spacing=5):
+                    self._build_bool_row(*settings.MID360_ENABLE_FIELD)
+                    for key, label, tooltip in settings.MID360_TEXT_FIELDS:
+                        self._build_text_row(key, label, tooltip)
             ui.Spacer(height=ui.Fraction(1))
 
     def _build_path_row(self, key: str, label: str, tooltip: str) -> None:

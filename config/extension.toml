@@ -1,10 +1,10 @@
 display_name = "Go2 Policy Example (unitree_rl_lab)"
 
 [package]
-version = "0.3.0"
+version = "0.4.0"
 category = "Simulation"
 title = "Unitree Go2 RL Policy Example"
-description = "Runs a unitree_rl_lab-trained Go2 locomotion policy in pure Isaac Sim, in the style of the built-in Spot Quadruped example. Robot/environment USD and policy checkpoint are configurable from Edit > Preferences > Go2 Policy Example. Optional ROS2 bridge: drive from cmd_vel, publish odom/tf/joint_states/clock for nav2."
+description = "Runs a unitree_rl_lab-trained Go2 locomotion policy in pure Isaac Sim, in the style of the built-in Spot Quadruped example. Robot/environment USD and policy checkpoint are configurable from Edit > Preferences > Go2 Policy Example. Optional ROS2 bridge: drive from cmd_vel, publish odom/tf/joint_states/clock for nav2. Optional Mid-360 lidar mount, published as PointCloud2."
 repository = ""
 keywords = ["isaac", "robot", "quadruped", "go2", "unitree", "policy"]
 readme = "docs/README.md"
@@ -20,10 +20,11 @@ writeTarget.kit = true
 "omni.kit.uiapp" = {}
 "omni.kit.window.filepicker" = {}
 "omni.kit.window.preferences" = {}
-# isaacsim.ros2.bridge is NOT listed here on purpose: it's only needed when
-# "Enable ROS2 Bridge" is turned on in Preferences, and is enabled lazily at
-# that point (see ros2_bridge.py) so this extension still starts cleanly in
-# environments without a working ROS2 install.
+# isaacsim.ros2.bridge and isaacsim.sensors.rtx are NOT listed here on
+# purpose: they're only needed when "Enable ROS2 Bridge" / "Mount Mid-360
+# Lidar" are turned on in Preferences, and are enabled lazily at that point
+# (see ros2_bridge.py / mid360.py) so this extension still starts cleanly
+# without a working ROS2 install or RTX renderer sensor support.
 
 [[python.module]]
 name = "go2_in_isaacsim"

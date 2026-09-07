@@ -48,10 +48,48 @@ RViz/nav2) need to match your actual USD if you care about that naming.
 For an actual nav2 stack: run nav2 as a normal ROS2 process (outside Isaac Sim) with
 `use_sim_time:=true`, and make sure its `ROS_DOMAIN_ID`/RMW settings match this
 extension's (or your system's ROS2 environment, if `ros2_domain_id` is left empty).
-This example does not publish any exteroceptive sensor (lidar/depth) -- point
-**Robot USD** in Preferences at a Go2 USD with sensors + an Action Graph publishing
-them (e.g. `sensor_msgs/LaserScan` or `PointCloud2`) for nav2's costmaps; everything
-above keeps working unmodified on top of that.
+
+### rclpy fails to import inside Isaac Sim ("Could not import system/internal rclpy")
+
+If Isaac Sim's own log shows `Could not import system rclpy` / `Could not import
+internal rclpy` and nothing this extension publishes shows up in `ros2 topic list`,
+the terminal Isaac Sim was launched from almost certainly has a *system* ROS2
+install sourced (e.g. `source /opt/ros/humble/setup.bash` in `.bashrc`), which
+pollutes `PYTHONPATH`/`AMENT_PREFIX_PATH` with a Python-3.10-built `rclpy` --
+incompatible with Isaac Sim's embedded Python 3.11, so it fails to load and the
+ROS2 bridge silently never actually initializes (no publishers/subscribers get
+created at all, independent of domain ID). Fix: launch Isaac Sim from a terminal
+with `ROS_VERSION`, `ROS_PYTHON_VERSION`, `ROS_DISTRO`, `AMENT_PREFIX_PATH`,
+`COLCON_PREFIX_PATH`, `PYTHONPATH`, and `CMAKE_PREFIX_PATH` unset, so it falls back
+to its own bundled, Python-3.11-matched internal `rclpy` -- the `ros2` CLI/nav2 in
+your normal ROS2 terminal are unaffected (DDS discovery doesn't care about Python
+versions), as long as `ROS_DOMAIN_ID`/`RMW_IMPLEMENTATION` still match.
+
+## Mid-360 lidar (optional)
+
+Turn on **Edit > Preferences > Go2 Policy Example > Mid-360 Lidar > Mount Mid-360
+Lidar**, then **Load** the example again. This mounts an RTX Lidar on the robot's
+head using a custom profile (`data/lidar_configs/Livox/Mid360.json`) approximating
+the real Livox Mid-360's headline spec -- 360deg horizontal x -7..+52deg vertical
+FOV, ~40m range, ~200,000 points/sec, 905nm -- since Isaac Sim doesn't ship an
+official Mid-360 profile (only Velodyne/Ouster/Hesai/SICK/etc.). It's built from 40
+evenly-spaced vertical channels swept through a full rotation, so it matches the
+Mid-360's FOV/range envelope but **not** its actual non-repetitive (rosette) scan
+pattern.
+
+Works with any Robot USD (mounted in Python at Load time, not baked into a
+specific USD file). **Mount Offset (x,y,z m)** and **Mount Tilt (deg)** in that
+same Preferences section control placement -- the shipped default (`0.28, 0, 0.10`,
+no tilt) is an approximate head-top placement; measure your actual bracket and
+adjust (tilt's sign/axis is best-effort -- check the point cloud in RViz and flip
+the sign if it tilts the wrong way).
+
+If **ROS2 Bridge** is also enabled, the point cloud is published as
+`sensor_msgs/PointCloud2` on **PointCloud2 Topic** (default `livox/lidar`, matching
+the real `livox_ros_driver2`'s default topic), with a static TF from the chassis
+frame to **Frame Id** (default `livox_frame`) at the configured mount offset. If
+ROS2 Bridge is off, the sensor is still mounted and renders (useful for debug draw
+or occupancy-map generation from within Isaac Sim), just not published.
 
 ## Notes for redistribution
 

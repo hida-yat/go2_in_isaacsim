@@ -17,6 +17,9 @@ _ROOT = "/persistent/exts/go2_in_isaacsim"
 # out of the box on a fresh checkout, with no external paths and no
 # configuration at all.
 _EXT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+# Public alias -- other modules (mid360.py) need the extension root too, to
+# point the RTX lidar plugin's profile search path at our bundled configs.
+EXT_ROOT = _EXT_ROOT
 _DEFAULT_POLICY_PATH = os.path.join(_EXT_ROOT, "data", "Policies", "Go2", "policy.pt")
 _DEFAULT_POLICY_ENV_PATH = os.path.join(_EXT_ROOT, "data", "Policies", "Go2", "env.yaml")
 _DEFAULT_POLICY_DEPLOY_PATH = os.path.join(_EXT_ROOT, "data", "Policies", "Go2", "deploy.yaml")
@@ -49,6 +52,14 @@ DEFAULTS = {
     "ros2_odom_topic": "odom",
     "ros2_joint_states_topic": "joint_states",
     "ros2_tf_topic": "tf",
+    # Mid-360 lidar (disabled by default -- mounts a Livox Mid-360-approximate
+    # RTX Lidar on the robot's head when enabled, and publishes it to ROS2 as
+    # a PointCloud2 if the ROS2 Bridge above is also enabled; see mid360.py).
+    "mid360_enabled": "False",
+    "mid360_translate": "0.28, 0.0, 0.10",
+    "mid360_tilt_deg": "0.0",
+    "mid360_topic": "livox/lidar",
+    "mid360_frame_id": "livox_frame",
 }
 
 # Order + display metadata for the settings window.
@@ -98,6 +109,32 @@ ROS2_TEXT_FIELDS = [
     ("ros2_odom_topic", "Odometry Topic", "nav_msgs/Odometry topic published from the ground-truth chassis pose."),
     ("ros2_joint_states_topic", "Joint States Topic", "sensor_msgs/JointState topic published for the articulation."),
     ("ros2_tf_topic", "TF Topic", "Topic the world->odom->chassis and robot link transforms are published on."),
+]
+
+# Mid-360 lidar settings window.
+MID360_ENABLE_FIELD = (
+    "mid360_enabled",
+    "Mount Mid-360 Lidar",
+    "Mounts a Livox Mid-360-approximate RTX Lidar on the robot's head (works with any Robot USD --"
+    " no sensor-equipped USD variant needed). Range/FOV approximate the real Mid-360's spec"
+    " (360deg x -7..+52deg, ~40m); the exact non-repetitive scan pattern is not reproduced.",
+)
+
+MID360_TEXT_FIELDS = [
+    (
+        "mid360_translate",
+        "Mount Offset (x,y,z m)",
+        "Lidar position relative to the robot's articulation root, in meters (comma-separated). Adjust to match"
+        " your actual Mid-360 mount bracket -- the shipped default is an approximate head-top placement.",
+    ),
+    (
+        "mid360_tilt_deg",
+        "Mount Tilt (deg)",
+        "Pitch tilt applied on top of a level mount, in degrees. Sign/axis is a best-effort convention --"
+        " check the point cloud in RViz and flip the sign if it tilts the wrong way.",
+    ),
+    ("mid360_topic", "PointCloud2 Topic", "Topic the Mid-360's PointCloud2 is published on (only if ROS2 Bridge is also enabled)."),
+    ("mid360_frame_id", "Frame Id", "TF frame id for the lidar (published as a static child of the chassis frame)."),
 ]
 
 

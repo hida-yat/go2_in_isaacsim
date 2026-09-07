@@ -9,7 +9,8 @@ See [`docs/README.md`](docs/README.md) for what's inside and how to configure it
 (robot USD, environment USD, policy checkpoint — all editable from
 `Edit > Preferences > Go2 Policy Example`, no code changes needed), including an
 optional ROS2 bridge (cmd_vel in, odom/tf/joint_states/clock out) for driving this
-from `nav2` or any other ROS2 stack.
+from `nav2` or any other ROS2 stack, and an optional Mid-360 lidar mount
+(published as PointCloud2) for nav2's costmaps.
 
 ## Install
 
@@ -39,6 +40,9 @@ Then in Isaac Sim:
   `Go2/usd/` (converted from Unitree's URDF). Not modified.
 - `data/Policies/Go2/` — a `unitree_rl_lab`-trained flat-terrain velocity
   policy (`policy.pt` + the matching Isaac Lab `params/env.yaml`).
+- `data/lidar_configs/Livox/Mid360.json` — a custom RTX Lidar profile
+  approximating the Livox Mid-360's spec (Isaac Sim ships no official one).
+  Authored for this repo, not a Livox/Unitree asset.
 
 Both are third-party artifacts, not authored by this repo. No license file is
 included here yet; check the terms of the upstream projects

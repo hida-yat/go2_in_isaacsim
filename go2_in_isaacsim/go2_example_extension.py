@@ -34,6 +34,9 @@ class Go2ExampleExtension(omni.ext.IExt):
         overview += "\n\nOptional ROS2 bridge (Edit > Preferences > Go2 Policy Example > ROS2 Bridge):"
         overview += " subscribes cmd_vel to drive the robot (keyboard still overrides while a key is held),"
         overview += " and publishes odom, tf, joint_states, and /clock -- the topics nav2 expects from a mobile base."
+        overview += "\n\nOptional Mid-360 lidar (Edit > Preferences > Go2 Policy Example > Mid-360 Lidar):"
+        overview += " mounts an approximate Livox Mid-360 on the robot's head and, if ROS2 Bridge is also"
+        overview += " enabled, publishes it as a PointCloud2 with a static TF from the chassis frame."
 
         overview += "\n\nPress the 'Open in IDE' button to view the source code."
 

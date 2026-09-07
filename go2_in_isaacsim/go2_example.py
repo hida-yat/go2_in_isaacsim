@@ -7,7 +7,7 @@ import omni
 import omni.appwindow  # Contains handle to keyboard
 from isaacsim.examples.interactive.base_sample import BaseSample
 
-from . import ros2_bridge, settings
+from . import mid360, ros2_bridge, settings
 from .go2 import Go2FlatTerrainPolicy
 
 
@@ -77,6 +77,17 @@ class Go2Example(BaseSample):
                     "environment found?). Driving from cmd_vel is disabled this run."
                 )
                 self._ros2_enabled = False
+
+        if settings.get("mid360_enabled") == "True":
+            if mid360.is_available():
+                sensor_prim = mid360.mount(self.go2.robot.prim_path)
+                if self._ros2_enabled:
+                    mid360.publish_to_ros2(sensor_prim.GetPath().pathString, settings.get("ros2_chassis_frame"))
+            else:
+                carb.log_warn(
+                    "Go2 Policy Example: Mid-360 Lidar is enabled in Preferences but "
+                    "isaacsim.sensors.rtx could not be enabled. Skipping."
+                )
 
         timeline = omni.timeline.get_timeline_interface()
         self._event_timer_callback = timeline.get_timeline_event_stream().create_subscription_to_pop_by_type(
