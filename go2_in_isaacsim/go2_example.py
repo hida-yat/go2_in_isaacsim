@@ -7,7 +7,7 @@ import omni
 import omni.appwindow  # Contains handle to keyboard
 from isaacsim.examples.interactive.base_sample import BaseSample
 
-from . import settings
+from . import ros2_bridge, settings
 from .go2 import Go2FlatTerrainPolicy
 
 
@@ -18,6 +18,13 @@ class Go2Example(BaseSample):
         self._world_settings["physics_dt"] = 1.0 / 200.0
         self._world_settings["rendering_dt"] = 8.0 / 200.0
         self._base_command = np.zeros(3)
+        # Number of currently-held mapped keys -- while >0, the keyboard
+        # takes priority over ROS2 cmd_vel (manual override); once released,
+        # control falls back to the latest cmd_vel command.
+        self._keys_active = 0
+        self._ros2_enabled = False
+        self._ros2_twist_node = None
+        self._cmd_vel_command = np.zeros(3)
 
         # bindings for keyboard to command, same layout as the Spot example.
         # Magnitudes are kept inside this checkpoint's trained command ranges
@@ -57,6 +64,20 @@ class Go2Example(BaseSample):
             name="Go2",
             position=np.array([0, 0, 0.42]),
         )
+
+        self._ros2_enabled = settings.get("ros2_enabled") == "True"
+        self._ros2_twist_node = None
+        if self._ros2_enabled:
+            if ros2_bridge.is_available():
+                self._ros2_twist_node = ros2_bridge.build_graph(self.go2.robot.prim_path)
+            else:
+                carb.log_warn(
+                    "Go2 Policy Example: ROS2 Bridge is enabled in Preferences but "
+                    "isaacsim.ros2.bridge could not be enabled (no compatible ROS2 "
+                    "environment found?). Driving from cmd_vel is disabled this run."
+                )
+                self._ros2_enabled = False
+
         timeline = omni.timeline.get_timeline_interface()
         self._event_timer_callback = timeline.get_timeline_event_stream().create_subscription_to_pop_by_type(
             int(omni.timeline.TimelineEventType.PLAY), self._timeline_timer_callback_fn
@@ -80,7 +101,13 @@ class Go2Example(BaseSample):
 
     def on_physics_step(self, step_size) -> None:
         if self._physics_ready:
-            self.go2.forward(step_size, self._base_command)
+            if self._ros2_enabled and self._ros2_twist_node:
+                self._cmd_vel_command = ros2_bridge.read_cmd_vel(self._ros2_twist_node)
+            # Keyboard is a manual override: while any mapped key is held,
+            # it wins; otherwise the robot follows the latest ROS2 cmd_vel
+            # (0 if ROS2 is disabled or nothing has been published yet).
+            command = self._base_command if self._keys_active else self._cmd_vel_command
+            self.go2.forward(step_size, command)
         else:
             self._physics_ready = True
             self.go2.initialize()
@@ -91,9 +118,11 @@ class Go2Example(BaseSample):
         if event.type == carb.input.KeyboardEventType.KEY_PRESS:
             if event.input.name in self._input_keyboard_mapping:
                 self._base_command += np.array(self._input_keyboard_mapping[event.input.name])
+                self._keys_active += 1
         elif event.type == carb.input.KeyboardEventType.KEY_RELEASE:
             if event.input.name in self._input_keyboard_mapping:
                 self._base_command -= np.array(self._input_keyboard_mapping[event.input.name])
+                self._keys_active = max(0, self._keys_active - 1)
         return True
 
     def _timeline_timer_callback_fn(self, event) -> None:

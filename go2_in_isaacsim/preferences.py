@@ -47,6 +47,13 @@ class Go2PolicyPreferences(PreferenceBuilder):
                 with ui.VStack(height=0, spacing=5):
                     for key, label, tooltip, _filter in settings.FIELDS:
                         self._build_path_row(key, label, tooltip)
+            with self.add_frame("ROS2 Bridge"):
+                with ui.VStack(height=0, spacing=5):
+                    self._build_bool_row(*settings.ROS2_ENABLE_FIELD)
+                    for key, label, tooltip in settings.ROS2_TOGGLE_FIELDS:
+                        self._build_bool_row(key, label, tooltip)
+                    for key, label, tooltip in settings.ROS2_TEXT_FIELDS:
+                        self._build_text_row(key, label, tooltip)
             ui.Spacer(height=ui.Fraction(1))
 
     def _build_path_row(self, key: str, label: str, tooltip: str) -> None:
@@ -70,3 +77,24 @@ class Go2PolicyPreferences(PreferenceBuilder):
                 w.model.set_value(settings.get(k))
 
             ui.Button("Reset", clicked_fn=reset, width=50)
+
+    def _build_text_row(self, key: str, label: str, tooltip: str) -> None:
+        with ui.HStack(height=24, spacing=4):
+            ui.Label(label, width=140, tooltip=tooltip)
+            widget = ui.StringField(height=20, tooltip=tooltip)
+            widget.model.set_value(settings.get(key))
+            widget.model.add_end_edit_fn(lambda m, k=key: settings.set(k, m.get_value_as_string()))
+
+            def reset(w=widget, k=key):
+                settings.reset(k)
+                w.model.set_value(settings.get(k))
+
+            ui.Button("Reset", clicked_fn=reset, width=50)
+
+    def _build_bool_row(self, key: str, label: str, tooltip: str) -> None:
+        with ui.HStack(height=24, spacing=4):
+            ui.Label(label, width=140, tooltip=tooltip)
+            model = ui.SimpleBoolModel(default_value=settings.get(key) == "True")
+            model.add_value_changed_fn(lambda m, k=key: settings.set(k, "True" if m.get_value_as_bool() else "False"))
+            ui.CheckBox(model, width=20)
+            ui.Spacer()

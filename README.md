@@ -7,7 +7,9 @@ drive with the keyboard. No standalone Python script to run.
 
 See [`docs/README.md`](docs/README.md) for what's inside and how to configure it
 (robot USD, environment USD, policy checkpoint — all editable from
-`Edit > Preferences > Go2 Policy Example`, no code changes needed).
+`Edit > Preferences > Go2 Policy Example`, no code changes needed), including an
+optional ROS2 bridge (cmd_vel in, odom/tf/joint_states/clock out) for driving this
+from `nav2` or any other ROS2 stack.
 
 ## Install
 

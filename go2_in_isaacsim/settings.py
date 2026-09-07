@@ -16,7 +16,7 @@ _ROOT = "/persistent/exts/go2_in_isaacsim"
 # Everything under data/ ships inside this extension (git repo) so it works
 # out of the box on a fresh checkout, with no external paths and no
 # configuration at all.
-_EXT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+_EXT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 _DEFAULT_POLICY_PATH = os.path.join(_EXT_ROOT, "data", "Policies", "Go2", "policy.pt")
 _DEFAULT_POLICY_ENV_PATH = os.path.join(_EXT_ROOT, "data", "Policies", "Go2", "env.yaml")
 _DEFAULT_POLICY_DEPLOY_PATH = os.path.join(_EXT_ROOT, "data", "Policies", "Go2", "deploy.yaml")
@@ -37,6 +37,18 @@ DEFAULTS = {
     "policy_path": _DEFAULT_POLICY_PATH,
     "policy_env_path": _DEFAULT_POLICY_ENV_PATH,
     "policy_deploy_path": _DEFAULT_POLICY_DEPLOY_PATH,
+    # ROS2 bridge (disabled by default -- enabling it loads isaacsim.ros2.bridge
+    # and builds a cmd_vel-in / odom+tf+joint_states+clock-out OmniGraph, see
+    # ros2_bridge.py).
+    "ros2_enabled": "False",
+    "ros2_publish_clock": "True",
+    "ros2_namespace": "",
+    "ros2_domain_id": "",
+    "ros2_chassis_frame": "base",
+    "ros2_cmd_vel_topic": "cmd_vel",
+    "ros2_odom_topic": "odom",
+    "ros2_joint_states_topic": "joint_states",
+    "ros2_tf_topic": "tf",
 }
 
 # Order + display metadata for the settings window.
@@ -63,6 +75,29 @@ FIELDS = [
         " checkpoint automatically instead of being hardcoded.",
         [("YAML", "*.yaml")],
     ),
+]
+
+# ROS2 bridge settings window: a single enable checkbox plus the topic/frame
+# names nav2 (or any other ROS2 client) needs to match. Left blank/False by
+# default so this extension behaves exactly as before unless turned on.
+ROS2_ENABLE_FIELD = ("ros2_enabled", "Enable ROS2 Bridge", "Subscribe to cmd_vel and publish odom/tf/joint_states/clock.")
+
+ROS2_TOGGLE_FIELDS = [
+    (
+        "ros2_publish_clock",
+        "Publish /clock",
+        "Publish simulation time on /clock. Needed if downstream ROS2 nodes (e.g. nav2) run with use_sim_time.",
+    ),
+]
+
+ROS2_TEXT_FIELDS = [
+    ("ros2_namespace", "Node Namespace", "Prefix applied to every topic below (leave empty for none)."),
+    ("ros2_domain_id", "Domain ID", "Leave empty to use ROS_DOMAIN_ID from the environment (or 0)."),
+    ("ros2_chassis_frame", "Chassis Frame Id", "TF/odometry frame id for the robot base (matches the USD's base link name)."),
+    ("ros2_cmd_vel_topic", "cmd_vel Topic", "geometry_msgs/Twist topic that drives the robot (e.g. from nav2 or teleop)."),
+    ("ros2_odom_topic", "Odometry Topic", "nav_msgs/Odometry topic published from the ground-truth chassis pose."),
+    ("ros2_joint_states_topic", "Joint States Topic", "sensor_msgs/JointState topic published for the articulation."),
+    ("ros2_tf_topic", "TF Topic", "Topic the world->odom->chassis and robot link transforms are published on."),
 ]
 
 

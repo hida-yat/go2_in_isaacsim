@@ -1,10 +1,10 @@
 display_name = "Go2 Policy Example (unitree_rl_lab)"
 
 [package]
-version = "0.2.0"
+version = "0.3.0"
 category = "Simulation"
 title = "Unitree Go2 RL Policy Example"
-description = "Runs a unitree_rl_lab-trained Go2 locomotion policy in pure Isaac Sim, in the style of the built-in Spot Quadruped example. Robot/environment USD and policy checkpoint are configurable from Edit > Preferences > Go2 Policy Example."
+description = "Runs a unitree_rl_lab-trained Go2 locomotion policy in pure Isaac Sim, in the style of the built-in Spot Quadruped example. Robot/environment USD and policy checkpoint are configurable from Edit > Preferences > Go2 Policy Example. Optional ROS2 bridge: drive from cmd_vel, publish odom/tf/joint_states/clock for nav2."
 repository = ""
 keywords = ["isaac", "robot", "quadruped", "go2", "unitree", "policy"]
 readme = "docs/README.md"
@@ -16,9 +16,14 @@ writeTarget.kit = true
 "isaacsim.examples.browser" = {}
 "isaacsim.examples.interactive" = {}
 "isaacsim.robot.policy.examples" = {}
+"omni.graph.core" = {}
 "omni.kit.uiapp" = {}
 "omni.kit.window.filepicker" = {}
 "omni.kit.window.preferences" = {}
+# isaacsim.ros2.bridge is NOT listed here on purpose: it's only needed when
+# "Enable ROS2 Bridge" is turned on in Preferences, and is enabled lazily at
+# that point (see ros2_bridge.py) so this extension still starts cleanly in
+# environments without a working ROS2 install.
 
 [[python.module]]
 name = "go2_in_isaacsim"

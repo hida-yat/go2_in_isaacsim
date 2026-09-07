@@ -31,6 +31,9 @@ class Go2ExampleExtension(omni.ext.IExt):
         overview += "\n\t\tright arrow / numpad 6: Move Right"
         overview += "\n\t\tN / numpad 7: Spin Counterclockwise"
         overview += "\n\t\tM / numpad 9: Spin Clockwise"
+        overview += "\n\nOptional ROS2 bridge (Edit > Preferences > Go2 Policy Example > ROS2 Bridge):"
+        overview += " subscribes cmd_vel to drive the robot (keyboard still overrides while a key is held),"
+        overview += " and publishes odom, tf, joint_states, and /clock -- the topics nav2 expects from a mobile base."
 
         overview += "\n\nPress the 'Open in IDE' button to view the source code."
 
