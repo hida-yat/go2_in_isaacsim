@@ -1,5 +1,15 @@
-# Mounts an approximate Livox Mid-360 RTX Lidar on the robot's head and
-# (optionally, alongside the ROS2 Bridge) publishes it as a ROS2 PointCloud2.
+# Publishes a Mid-360 lidar -- baked into a Robot USD such as the bundled
+# go2_with_mid360.usd (see data/Robots/Go2/usd/go2_with_mid360.usd, built
+# from go2.usd + data/Sensors/Mid360/Mid360.usd, a real Mid-360 CAD model
+# converted to USD, with an RTX Lidar sensor API applied) -- as a ROS2
+# PointCloud2, if one is present on the currently loaded robot.
+#
+# This does NOT mount a sensor at runtime: the sensor is part of the Robot
+# USD itself (visual geometry + lidar API on the same prim tree, so what you
+# see is what's actually sensing). go2.usd (bare) and go2_with_mid360.usd are
+# separate files -- pick one via Edit > Preferences > Go2 Policy Example >
+# Assets > Robot USD (or its Preset dropdown) -- rather than every Robot USD
+# silently growing a lidar. find_sensor() below just looks for one.
 #
 # There is no official Mid-360 profile bundled with Isaac Sim's RTX Lidar
 # (isaacsim.sensors.rtx/data/lidar_configs/ has Velodyne/Ouster/Hesai/SICK/...
@@ -9,48 +19,29 @@
 # points/sec, 905nm -- using 40 evenly-spaced vertical channels swept through
 # a full rotation. This is an envelope match, not a reproduction of the real
 # Mid-360's non-repetitive (rosette) scan pattern.
-#
-# The lidar is created directly as an RTX "camera" prim (IsaacSensorSchema's
-# IsaacRtxLidarSensorAPI applied to a UsdGeom.Camera), the same mechanism
-# isaacsim.sensors.rtx's own IsaacSensorCreateRtxLidar command falls back to
-# (force_camera_prim=True) for any sensor that isn't one of its bundled
-# Nucleus-hosted vendor assets -- this is the only way to point the renderer
-# at an arbitrary custom JSON scan profile in this Isaac Sim version.
 
-import math
 import os
 
 import carb.settings
-import omni.kit.commands
 import omni.graph.core as og
 import omni.usd
-from isaacsim.core.utils.xforms import reset_and_set_xform_ops
-from pxr import Gf
+from pxr import Usd, UsdGeom
 
 from . import settings
 
 _CONFIG_NAME = "Mid360"
 _CONFIG_DIR = os.path.join(settings.EXT_ROOT, "data", "lidar_configs", "Livox")
 _PROFILE_SEARCH_PATH_SETTING = "/app/sensors/nv/lidar/profileBaseFolder"
+_LIDAR_API = "IsaacRtxLidarSensorAPI"
 
-SENSOR_NAME = "Mid360"
 GRAPH_PATH = "/World/Go2Mid360ROS2"
-
-
-def _parse_xyz(text: str, default=(0.0, 0.0, 0.0)):
-    try:
-        parts = [float(p) for p in text.split(",")]
-        if len(parts) == 3:
-            return tuple(parts)
-    except (TypeError, ValueError):
-        pass
-    return default
 
 
 def _ensure_profile_search_path() -> None:
     """Adds this extension's data/lidar_configs/Livox/ to the RTX lidar
     plugin's profile search path (additive -- preserves Isaac Sim's own
-    vendor config directories already registered there)."""
+    vendor config directories already registered there). Only matters if the
+    loaded Robot USD actually has a Mid-360 sensor using this config name."""
     s = carb.settings.get_settings()
     current = list(s.get(_PROFILE_SEARCH_PATH_SETTING) or [])
     if _CONFIG_DIR not in current:
@@ -69,39 +60,45 @@ def is_available() -> bool:
         return False
 
 
-def mount(robot_prim_path: str):
-    """Creates (or replaces) the Mid-360 sensor prim as a child of the
-    robot's articulation root. Returns the created sensor Usd.Prim."""
+def find_sensor(robot_prim_path: str):
+    """Looks for an RTX Lidar sensor (a prim with IsaacRtxLidarSensorAPI
+    applied) anywhere under the loaded robot. Returns the first one found,
+    or None if the loaded Robot USD doesn't have one (e.g. bare go2.usd)."""
+    stage = omni.usd.get_context().get_stage()
+    robot_prim = stage.GetPrimAtPath(robot_prim_path)
+    if not robot_prim.IsValid():
+        return None
+    for prim in Usd.PrimRange(robot_prim):
+        if prim.HasAPI(_LIDAR_API):
+            return prim
+    return None
+
+
+def _relative_transform(sensor_prim, reference_prim_path: str):
+    """Sensor's translation/rotation relative to reference_prim_path (the
+    robot's articulation root, same reference ros2_bridge.py uses for
+    odometry/TF), computed from the actual USD hierarchy -- not a guessed
+    offset -- so the published TF always matches wherever the sensor is
+    really mounted, in any Robot USD."""
+    stage = sensor_prim.GetStage()
+    reference_prim = stage.GetPrimAtPath(reference_prim_path)
+    sensor_to_world = UsdGeom.Xformable(sensor_prim).ComputeLocalToWorldTransform(Usd.TimeCode.Default())
+    reference_to_world = UsdGeom.Xformable(reference_prim).ComputeLocalToWorldTransform(Usd.TimeCode.Default())
+    sensor_to_reference = sensor_to_world * reference_to_world.GetInverse()
+    translation = sensor_to_reference.ExtractTranslation()
+    quat = sensor_to_reference.ExtractRotationQuat()
+    imaginary = quat.GetImaginary()
+    return translation, (quat.GetReal(), imaginary[0], imaginary[1], imaginary[2])
+
+
+def publish_to_ros2(sensor_prim, robot_prim_path: str, chassis_frame: str) -> None:
+    """Builds the OmniGraph that publishes sensor_prim (from find_sensor) as
+    a ROS2 PointCloud2, plus its chassis->lidar TF (computed from the prim's
+    actual transform -- see _relative_transform -- on the same tf topic as
+    ros2_bridge.py's world->odom->chassis chain, so it shows up connected to
+    the rest of the tree)."""
     _ensure_profile_search_path()
 
-    stage = omni.usd.get_context().get_stage()
-    sensor_path = f"{robot_prim_path}/{SENSOR_NAME}"
-    if stage.GetPrimAtPath(sensor_path).IsValid():
-        stage.RemovePrim(sensor_path)
-
-    _, sensor_prim = omni.kit.commands.execute(
-        "IsaacSensorCreateRtxLidar",
-        path=sensor_path,
-        parent=None,
-        config=_CONFIG_NAME,
-        force_camera_prim=True,
-    )
-
-    tx, ty, tz = _parse_xyz(settings.get("mid360_translate"), (0.28, 0.0, 0.10))
-    tilt_deg = float(settings.get("mid360_tilt_deg") or 0.0)
-    half = math.radians(tilt_deg) / 2.0
-    # Pitch about the robot's Y (left) axis. Gf.Quatd is (w, i, j, k).
-    orientation = Gf.Quatd(math.cos(half), 0.0, math.sin(half), 0.0)
-    reset_and_set_xform_ops(sensor_prim, Gf.Vec3d(tx, ty, tz), orientation)
-
-    return sensor_prim
-
-
-def publish_to_ros2(sensor_prim_path: str, chassis_frame: str) -> None:
-    """Builds the OmniGraph that publishes the mounted Mid-360 as a ROS2
-    PointCloud2, plus the fixed chassis->lidar TF at its mount offset (on the
-    same tf topic as ros2_bridge.py's world->odom->chassis chain, so it shows
-    up connected to the rest of the tree)."""
     stage = omni.usd.get_context().get_stage()
     if stage.GetPrimAtPath(GRAPH_PATH).IsValid():
         stage.RemovePrim(GRAPH_PATH)
@@ -109,12 +106,8 @@ def publish_to_ros2(sensor_prim_path: str, chassis_frame: str) -> None:
     node_namespace = settings.get("ros2_namespace")
     domain_id = settings.get("ros2_domain_id")
     lidar_frame = settings.get("mid360_frame_id")
-    tx, ty, tz = _parse_xyz(settings.get("mid360_translate"), (0.28, 0.0, 0.10))
-    tilt_deg = float(settings.get("mid360_tilt_deg") or 0.0)
-    half = math.radians(tilt_deg) / 2.0
-    # og.Controller SET_VALUES wants a plain (w, i, j, k) tuple for quatd
-    # attributes, not a Gf.Quatd object (that's only for direct USD xform ops).
-    orientation = (math.cos(half), 0.0, math.sin(half), 0.0)
+    sensor_prim_path = sensor_prim.GetPath().pathString
+    translation, orientation = _relative_transform(sensor_prim, robot_prim_path)
 
     keys = og.Controller.Keys
     og.Controller.edit(
@@ -139,7 +132,7 @@ def publish_to_ros2(sensor_prim_path: str, chassis_frame: str) -> None:
                 ("PublishPointCloud.inputs:nodeNamespace", node_namespace),
                 ("TFChassisToLidar.inputs:parentFrameId", chassis_frame),
                 ("TFChassisToLidar.inputs:childFrameId", lidar_frame),
-                ("TFChassisToLidar.inputs:translation", Gf.Vec3d(tx, ty, tz)),
+                ("TFChassisToLidar.inputs:translation", translation),
                 ("TFChassisToLidar.inputs:rotation", orientation),
                 # Not staticPublisher=True: that publishes with different QoS
                 # (tf2's static-transform convention) and, in practice here,

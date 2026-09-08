@@ -9,8 +9,8 @@ See [`docs/README.md`](docs/README.md) for what's inside and how to configure it
 (robot USD, environment USD, policy checkpoint — all editable from
 `Edit > Preferences > Go2 Policy Example`, no code changes needed), including an
 optional ROS2 bridge (cmd_vel in, odom/tf/joint_states/clock out) for driving this
-from `nav2` or any other ROS2 stack, and an optional Mid-360 lidar mount
-(published as PointCloud2) for nav2's costmaps.
+from `nav2` or any other ROS2 stack, and an optional `go2_with_mid360.usd` Robot
+USD variant (published as PointCloud2 when ROS2 Bridge is on) for nav2's costmaps.
 
 ## Install
 
@@ -40,21 +40,28 @@ with the ROS2 Bridge feature below.
 
 ## What's bundled
 
-- `data/Robots/Go2/usd/` — Go2 USD, sourced from
+- `data/Robots/Go2/usd/go2.usd` — bare Go2 USD, sourced from
   [unitree_model](https://github.com/unitreerobotics/unitree_model)'s
   `Go2/usd/` (converted from Unitree's URDF). Not modified.
+- `data/Robots/Go2/usd/go2_with_mid360.usd` — the same robot with a Mid-360
+  lidar mounted on its head, authored for this repo (references `go2.usd` and
+  `data/Sensors/Mid360/Mid360.usd` below; see
+  [Mid-360 lidar](docs/README.md#mid-360-lidar-optional) in `docs/README.md`).
+- `data/Sensors/Mid360/Mid360.usd` — a Livox Mid-360 CAD model, converted from
+  a STEP file (`Isaac Sim`'s built-in CAD Converter) to USD for this repo.
 - `data/Policies/Go2/` — a `unitree_rl_lab`-trained flat-terrain velocity
   policy (`policy.pt` + the matching Isaac Lab `params/env.yaml`).
 - `data/lidar_configs/Livox/Mid360.json` — a custom RTX Lidar profile
   approximating the Livox Mid-360's spec (Isaac Sim ships no official one).
   Authored for this repo, not a Livox/Unitree asset.
 
-Both are third-party artifacts, not authored by this repo. No license file is
-included here yet; check the terms of the upstream projects
-([unitree_model](https://github.com/unitreerobotics/unitree_ros),
-[unitree_rl_lab](https://github.com/unitreerobotics/unitree_rl_lab)) before
-redistributing further, and add a LICENSE here once you've decided on one for
-this repo's own code.
+The Go2 and Mid-360 models are third-party artifacts, not authored by this
+repo. No license file is included here yet; check the terms of the upstream
+projects ([unitree_model](https://github.com/unitreerobotics/unitree_ros),
+[unitree_rl_lab](https://github.com/unitreerobotics/unitree_rl_lab), and
+whatever your Mid-360 CAD source's own terms are) before redistributing
+further, and add a LICENSE here once you've decided on one for this repo's
+own code.
 
 ## Swapping in your own assets
 

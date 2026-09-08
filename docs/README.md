@@ -12,8 +12,11 @@ Drive with arrow keys / numpad (same mapping as Spot).
 Nothing here is hardcoded in Python. Open **Edit > Preferences > Go2 Policy Example**
 to point this extension at your own assets:
 
-- **Robot USD** — the Go2 USD to spawn. Defaults to the bare `go2.usd`; point this at a
-  variant with sensors + an Action Graph added to bring those sensors along.
+- **Robot USD** — the Go2 USD to spawn. Defaults to the bare `go2.usd`. The **Preset**
+  dropdown right below it quick-fills this with either that bare file or the bundled
+  `go2_with_mid360.usd` (see [Mid-360 lidar](#mid-360-lidar-optional) below); pick
+  **Custom...** to type/browse your own variant instead (e.g. with other sensors +
+  an Action Graph added).
 - **Environment USD** — optional world/environment USD. Leave empty for the default
   flat ground plane. The **Preset** dropdown right below it quick-fills this field
   with one of Isaac Sim's own bundled sample environments (Grid, Simple Room,
@@ -92,29 +95,35 @@ each time.
 
 ## Mid-360 lidar (optional)
 
-Turn on **Edit > Preferences > Go2 Policy Example > Mid-360 Lidar > Mount Mid-360
-Lidar**, then **Load** the example again. This mounts an RTX Lidar on the robot's
-head using a custom profile (`data/lidar_configs/Livox/Mid360.json`) approximating
-the real Livox Mid-360's headline spec -- 360deg horizontal x -7..+52deg vertical
-FOV, ~40m range, ~200,000 points/sec, 905nm -- since Isaac Sim doesn't ship an
-official Mid-360 profile (only Velodyne/Ouster/Hesai/SICK/etc.). It's built from 40
-evenly-spaced vertical channels swept through a full rotation, so it matches the
-Mid-360's FOV/range envelope but **not** its actual non-repetitive (rosette) scan
-pattern.
+Unlike the ROS2 bridge above, this isn't a Preferences toggle: it's a **separate
+Robot USD**, `data/Robots/Go2/usd/go2_with_mid360.usd`, alongside the bare
+`go2.usd`. Pick **Go2 with Mid-360** from the **Preset** dropdown under **Robot
+USD** in Preferences (or type/browse its path), then **Load** the example again.
+What you see is what's actually sensing -- the same prim carries the visual mesh
+and the lidar API, not an invisible sensor mounted separately in Python.
 
-Works with any Robot USD (mounted in Python at Load time, not baked into a
-specific USD file). **Mount Offset (x,y,z m)** and **Mount Tilt (deg)** in that
-same Preferences section control placement -- the shipped default (`0.28, 0, 0.10`,
-no tilt) is an approximate head-top placement; measure your actual bracket and
-adjust (tilt's sign/axis is best-effort -- check the point cloud in RViz and flip
-the sign if it tilts the wrong way).
+`go2_with_mid360.usd` references `go2.usd` plus `data/Sensors/Mid360/Mid360.usd`
+(a real Mid-360 CAD model, converted from a STEP file to USD), mounted on
+`base` at an approximate head-top offset (measure your actual bracket and rebuild
+if you need it exact -- see `go2_in_isaacsim/mid360.py`'s module docstring for how
+this file was built). An RTX Lidar sensor API is applied to a small `Camera` prim
+alongside the visual mesh, using a custom scan profile
+(`data/lidar_configs/Livox/Mid360.json`) approximating the real Mid-360's headline
+spec -- 360deg horizontal x -7..+52deg vertical FOV, ~40m range, ~200,000
+points/sec, 905nm -- since Isaac Sim doesn't ship an official Mid-360 profile (only
+Velodyne/Ouster/Hesai/SICK/etc.). It's built from 40 evenly-spaced vertical
+channels swept through a full rotation, so it matches the Mid-360's FOV/range
+envelope but **not** its actual non-repetitive (rosette) scan pattern.
 
-If **ROS2 Bridge** is also enabled, the point cloud is published as
+If **ROS2 Bridge** is also enabled and the loaded Robot USD has a Mid-360 (found
+by scanning for the RTX Lidar API, so this works on any Robot USD that has one,
+not just the bundled one), its point cloud is published as
 `sensor_msgs/PointCloud2` on **PointCloud2 Topic** (default `livox/lidar`, matching
-the real `livox_ros_driver2`'s default topic), with a static TF from the chassis
-frame to **Frame Id** (default `livox_frame`) at the configured mount offset. If
-ROS2 Bridge is off, the sensor is still mounted and renders (useful for debug draw
-or occupancy-map generation from within Isaac Sim), just not published.
+the real `livox_ros_driver2`'s default topic), with a TF from the chassis frame to
+**Frame Id** (default `livox_frame`) computed from the sensor prim's *actual*
+transform in the USD -- not a guessed offset -- so it's always correct regardless
+of which Robot USD (or mount position) is loaded. If the loaded Robot USD has no
+Mid-360 (e.g. bare `go2.usd`), this is silently skipped.
 
 ## Notes for redistribution
 

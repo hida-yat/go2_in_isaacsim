@@ -52,12 +52,9 @@ DEFAULTS = {
     "ros2_odom_topic": "odom",
     "ros2_joint_states_topic": "joint_states",
     "ros2_tf_topic": "tf",
-    # Mid-360 lidar (disabled by default -- mounts a Livox Mid-360-approximate
-    # RTX Lidar on the robot's head when enabled, and publishes it to ROS2 as
-    # a PointCloud2 if the ROS2 Bridge above is also enabled; see mid360.py).
-    "mid360_enabled": "False",
-    "mid360_translate": "0.28, 0.0, 0.10",
-    "mid360_tilt_deg": "0.0",
+    # Mid-360 lidar: purely a publish-topic/frame naming choice. Whether
+    # there IS a Mid-360 to publish depends on which Robot USD is loaded
+    # (see ROBOT_PRESETS / go2_with_mid360.usd) -- see mid360.py.
     "mid360_topic": "livox/lidar",
     "mid360_frame_id": "livox_frame",
 }
@@ -106,6 +103,15 @@ ENVIRONMENT_PRESETS = [
     ("Custom...", None),
 ]
 
+# Same quick-pick pattern as ENVIRONMENT_PRESETS, for "robot_usd_path".
+# These are bundled local files (unlike the Nucleus-relative environment
+# presets), so the paths are resolved immediately, not at Load time.
+ROBOT_PRESETS = [
+    ("Go2 (bare)", _DEFAULT_ROBOT_USD_PATH),
+    ("Go2 with Mid-360", os.path.join(_EXT_ROOT, "data", "Robots", "Go2", "usd", "go2_with_mid360.usd")),
+    ("Custom...", None),
+]
+
 # ROS2 bridge settings window: a single enable checkbox plus the topic/frame
 # names nav2 (or any other ROS2 client) needs to match. Left blank/False by
 # default so this extension behaves exactly as before unless turned on.
@@ -129,30 +135,12 @@ ROS2_TEXT_FIELDS = [
     ("ros2_tf_topic", "TF Topic", "Topic the world->odom->chassis and robot link transforms are published on."),
 ]
 
-# Mid-360 lidar settings window.
-MID360_ENABLE_FIELD = (
-    "mid360_enabled",
-    "Mount Mid-360 Lidar",
-    "Mounts a Livox Mid-360-approximate RTX Lidar on the robot's head (works with any Robot USD --"
-    " no sensor-equipped USD variant needed). Range/FOV approximate the real Mid-360's spec"
-    " (360deg x -7..+52deg, ~40m); the exact non-repetitive scan pattern is not reproduced.",
-)
-
+# Mid-360 lidar settings window. Whether one gets published at all depends
+# on whether the loaded Robot USD has one (see ROBOT_PRESETS above) -- these
+# two fields are just its topic/frame naming.
 MID360_TEXT_FIELDS = [
-    (
-        "mid360_translate",
-        "Mount Offset (x,y,z m)",
-        "Lidar position relative to the robot's articulation root, in meters (comma-separated). Adjust to match"
-        " your actual Mid-360 mount bracket -- the shipped default is an approximate head-top placement.",
-    ),
-    (
-        "mid360_tilt_deg",
-        "Mount Tilt (deg)",
-        "Pitch tilt applied on top of a level mount, in degrees. Sign/axis is a best-effort convention --"
-        " check the point cloud in RViz and flip the sign if it tilts the wrong way.",
-    ),
-    ("mid360_topic", "PointCloud2 Topic", "Topic the Mid-360's PointCloud2 is published on (only if ROS2 Bridge is also enabled)."),
-    ("mid360_frame_id", "Frame Id", "TF frame id for the lidar (published as a static child of the chassis frame)."),
+    ("mid360_topic", "PointCloud2 Topic", "Topic the Mid-360's PointCloud2 is published on, if the loaded Robot USD has one (only if ROS2 Bridge is also enabled)."),
+    ("mid360_frame_id", "Frame Id", "TF frame id for the lidar (published as a child of the chassis frame, at its actual mount transform)."),
 ]
 
 

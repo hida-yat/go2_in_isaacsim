@@ -95,16 +95,20 @@ class Go2Example(BaseSample):
                 )
                 self._ros2_enabled = False
 
-        if settings.get("mid360_enabled") == "True":
-            if mid360.is_available():
-                sensor_prim = mid360.mount(self.go2.robot.prim_path)
-                if self._ros2_enabled:
-                    mid360.publish_to_ros2(sensor_prim.GetPath().pathString, settings.get("ros2_chassis_frame"))
-            else:
-                carb.log_warn(
-                    "Go2 Policy Example: Mid-360 Lidar is enabled in Preferences but "
-                    "isaacsim.sensors.rtx could not be enabled. Skipping."
-                )
+        # A Mid-360 lidar isn't something this example mounts -- it's part of
+        # the Robot USD itself (see data/Robots/Go2/usd/go2_with_mid360.usd,
+        # selectable from Preferences > Assets > Robot USD). If the currently
+        # loaded robot has one and ROS2 Bridge is enabled, publish it.
+        if self._ros2_enabled:
+            sensor_prim = mid360.find_sensor(self.go2.robot.prim_path)
+            if sensor_prim is not None:
+                if mid360.is_available():
+                    mid360.publish_to_ros2(sensor_prim, self.go2.robot.prim_path, settings.get("ros2_chassis_frame"))
+                else:
+                    carb.log_warn(
+                        "Go2 Policy Example: this Robot USD has a Mid-360 lidar but "
+                        "isaacsim.sensors.rtx could not be enabled. Skipping its ROS2 publish."
+                    )
 
         timeline = omni.timeline.get_timeline_interface()
         self._event_timer_callback = timeline.get_timeline_event_stream().create_subscription_to_pop_by_type(

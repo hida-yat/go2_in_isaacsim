@@ -47,8 +47,10 @@ class Go2PolicyPreferences(PreferenceBuilder):
                 with ui.VStack(height=0, spacing=5):
                     for key, label, tooltip, _filter in settings.FIELDS:
                         widget = self._build_path_row(key, label, tooltip)
-                        if key == "environment_usd_path":
-                            self._build_environment_preset_row(widget)
+                        if key == "robot_usd_path":
+                            self._build_preset_row(settings.ROBOT_PRESETS, widget, key)
+                        elif key == "environment_usd_path":
+                            self._build_preset_row(settings.ENVIRONMENT_PRESETS, widget, key)
             with self.add_frame("ROS2 Bridge"):
                 with ui.VStack(height=0, spacing=5):
                     self._build_bool_row(*settings.ROS2_ENABLE_FIELD)
@@ -58,7 +60,12 @@ class Go2PolicyPreferences(PreferenceBuilder):
                         self._build_text_row(key, label, tooltip)
             with self.add_frame("Mid-360 Lidar"):
                 with ui.VStack(height=0, spacing=5):
-                    self._build_bool_row(*settings.MID360_ENABLE_FIELD)
+                    ui.Label(
+                        "Whether a Mid-360 gets published depends on the loaded Robot USD above"
+                        " (pick 'Go2 with Mid-360' there) -- these just name its topic/frame.",
+                        word_wrap=True,
+                        height=0,
+                    )
                     for key, label, tooltip in settings.MID360_TEXT_FIELDS:
                         self._build_text_row(key, label, tooltip)
             ui.Spacer(height=ui.Fraction(1))
@@ -86,21 +93,22 @@ class Go2PolicyPreferences(PreferenceBuilder):
             ui.Button("Reset", clicked_fn=reset, width=50)
         return widget
 
-    def _build_environment_preset_row(self, path_widget: ui.StringField) -> None:
-        """Quick-pick dropdown for settings.ENVIRONMENT_PRESETS, sitting right
-        under the Environment USD path field. Picking a preset writes its
-        (Nucleus-relative) path into that field; "Custom..." leaves it alone."""
+    def _build_preset_row(self, presets, path_widget: ui.StringField, setting_key: str) -> None:
+        """Quick-pick dropdown for a (label, path_or_None) preset list, sitting
+        right under a path field. Picking a preset writes its path into that
+        field and the setting; "Custom..." (path_or_None is None) leaves both
+        alone."""
         with ui.HStack(height=24, spacing=4):
-            ui.Label("Preset", width=140, tooltip="Quick-pick one of Isaac Sim's bundled environments.")
-            labels = [preset_label for preset_label, _ in settings.ENVIRONMENT_PRESETS]
+            ui.Label("Preset", width=140, tooltip="Quick-pick one of the bundled options above.")
+            labels = [preset_label for preset_label, _ in presets]
             combo_model = ui.ComboBox(0, *labels, height=20).model
 
-            def on_changed(model, _item, w=path_widget):
+            def on_changed(model, _item, w=path_widget, k=setting_key, p=presets):
                 idx = model.get_item_value_model().as_int
-                value = settings.ENVIRONMENT_PRESETS[idx][1]
+                value = p[idx][1]
                 if value is None:  # "Custom..." -- keep whatever is in the path field
                     return
-                settings.set("environment_usd_path", value)
+                settings.set(k, value)
                 w.model.set_value(value)
 
             combo_model.add_item_changed_fn(on_changed)
