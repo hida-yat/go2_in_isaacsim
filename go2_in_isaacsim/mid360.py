@@ -25,7 +25,7 @@ import omni.kit.commands
 import omni.graph.core as og
 import omni.usd
 from isaacsim.core.utils.xforms import reset_and_set_xform_ops
-from pxr import Gf
+from pxr import Gf, UsdGeom
 
 from . import settings
 
@@ -56,6 +56,35 @@ def _ensure_profile_search_path() -> None:
     if _CONFIG_DIR not in current:
         current.append(_CONFIG_DIR)
         s.set(_PROFILE_SEARCH_PATH_SETTING, current)
+
+
+def _add_visual_mesh(sensor_prim) -> None:
+    """Adds a simple procedural visual (cylinder body + domed top) under the
+    sensor prim, roughly matching the real Mid-360's physical silhouette
+    (~65mm diameter x ~35mm body, domed scan window on top). The RTX Lidar
+    "camera" prim itself has no visible geometry, so without this the mount
+    point renders as nothing. Plain geometry only -- no PhysicsAPI applied,
+    so it does not become a collider."""
+    stage = sensor_prim.GetStage()
+    visual_path = sensor_prim.GetPath().AppendChild("Visual")
+    if stage.GetPrimAtPath(visual_path).IsValid():
+        stage.RemovePrim(visual_path)
+
+    body_radius = 0.0325
+    body_height = 0.035
+
+    body = UsdGeom.Cylinder.Define(stage, visual_path.AppendChild("Body"))
+    body.CreateRadiusAttr(body_radius)
+    body.CreateHeightAttr(body_height)
+    body.CreateAxisAttr("Z")
+    body.AddTranslateOp().Set(Gf.Vec3d(0.0, 0.0, body_height / 2.0))
+    body.CreateDisplayColorAttr([(0.05, 0.05, 0.05)])
+
+    dome = UsdGeom.Sphere.Define(stage, visual_path.AppendChild("Dome"))
+    dome.CreateRadiusAttr(body_radius)
+    dome.AddTranslateOp().Set(Gf.Vec3d(0.0, 0.0, body_height))
+    dome.AddScaleOp().Set(Gf.Vec3d(1.0, 1.0, 0.55))
+    dome.CreateDisplayColorAttr([(0.8, 0.8, 0.8)])
 
 
 def is_available() -> bool:
@@ -93,6 +122,8 @@ def mount(robot_prim_path: str):
     # Pitch about the robot's Y (left) axis. Gf.Quatd is (w, i, j, k).
     orientation = Gf.Quatd(math.cos(half), 0.0, math.sin(half), 0.0)
     reset_and_set_xform_ops(sensor_prim, Gf.Vec3d(tx, ty, tz), orientation)
+
+    _add_visual_mesh(sensor_prim)
 
     return sensor_prim
 
