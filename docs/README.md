@@ -140,6 +140,51 @@ transform in the USD -- not a guessed offset -- so it's always correct regardles
 of which Robot USD (or mount position) is loaded. If the loaded Robot USD has no
 Mid-360 (e.g. bare `go2.usd`), this is silently skipped.
 
+## Mid-360 IMU
+
+Loading **Go2 with Mid-360** with **Enable ROS2 Bridge** creates a native
+physics IMU at `base/Mid360/Mid360Imu` at runtime. Existing USDs need no rebuild.
+After updating the extension, restart Isaac Sim, then Load and Play the example.
+
+- Topic: `livox/imu` (`sensor_msgs/Imu`), configurable as **IMU Topic** in
+  **Mid-360 Lidar / IMU** preferences. The ROS2 namespace/domain also apply.
+- Frame: `livox_imu_frame`, configurable as **IMU Frame Id**, with a
+  `base -> livox_imu_frame` TF computed from the USD. Use distinct IMU, lidar,
+  and chassis frame IDs. The IMU follows the mount axes/tilt, not the RTX
+  sensor's additional rendering-axis rotation; consumers must use the TF
+  between the lidar and IMU instead of assuming identical axes.
+- Rate: one reading per physics step, **200 Hz of simulation time** in this
+  example, independent of its 25 Hz rendering. A slow simulation has a lower
+  wall-clock message rate. Stopping physics stops publication.
+- Acceleration: **m/s²**, including gravity (specific force); a stationary,
+  level sensor reads approximately `(0, 0, +9.81)`. With the existing 13°
+  mount tilt, gravity has both X and Z components. Angular velocity is **rad/s**
+  in the IMU frame. Data come from Isaac Sim's physics IMU, including the effect
+  of its placement on the moving rigid body.
+- Timestamps use the same simulation clock as the lidar/robot graphs, with
+  `resetOnStop=False`. Downstream nodes should use `use_sim_time`.
+- This is a raw, ideal IMU: no simulated bias, random walk, or calibrated noise.
+  Orientation is unavailable (`orientation_covariance[0] = -1`), rather than
+  substituting ground-truth attitude. Zero acceleration/angular-velocity
+  covariance means unknown, not a claim of perfect measured accuracy.
+- The internal IMU position is approximated by the mount origin, with identity
+  local rotation. This is **not a calibrated MID360 IMU-to-lidar extrinsic**.
+  The lidar remains a rotary scan approximation; point timing and a complete
+  Livox driver message interface are not provided by this IMU addition.
+
+Check from a ROS2 terminal (default namespace):
+
+```bash
+ros2 topic echo /livox/imu --once
+ros2 topic hz /livox/imu
+ros2 run tf2_ros tf2_echo base livox_imu_frame
+```
+
+A headless physics/ROS2 integration check is available from this extension's
+root: `isaac_run tools/test_mid360_imu.py`. It uses a separate ROS domain and
+checks gravity in the tilted frame, angular velocity, timestamps, sampling
+with slower rendering, TF, and stop/restart behavior.
+
 ## Notes for redistribution
 
 - The bundled default checkpoint came from

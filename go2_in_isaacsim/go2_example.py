@@ -7,7 +7,7 @@ import omni
 import omni.appwindow  # Contains handle to keyboard
 from isaacsim.examples.interactive.base_sample import BaseSample
 
-from . import mid360, ros2_bridge, settings
+from . import imu, mid360, ros2_bridge, settings
 from .go2 import Go2FlatTerrainPolicy
 
 
@@ -102,6 +102,7 @@ class Go2Example(BaseSample):
         if self._ros2_enabled:
             sensor_prim = mid360.find_sensor(self.go2.robot.prim_path)
             if sensor_prim is not None:
+                imu.publish_to_ros2(sensor_prim, self.go2.robot.prim_path, settings.get("ros2_chassis_frame"))
                 if mid360.is_available():
                     mid360.publish_to_ros2(sensor_prim, self.go2.robot.prim_path, settings.get("ros2_chassis_frame"))
                 else:

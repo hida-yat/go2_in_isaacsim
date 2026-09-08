@@ -58,7 +58,7 @@ class Go2PolicyPreferences(PreferenceBuilder):
                         self._build_bool_row(key, label, tooltip)
                     for key, label, tooltip in settings.ROS2_TEXT_FIELDS:
                         self._build_text_row(key, label, tooltip)
-            with self.add_frame("Mid-360 Lidar"):
+            with self.add_frame("Mid-360 Lidar / IMU"):
                 with ui.VStack(height=0, spacing=5):
                     ui.Label(
                         "Whether a Mid-360 gets published depends on the loaded Robot USD above"

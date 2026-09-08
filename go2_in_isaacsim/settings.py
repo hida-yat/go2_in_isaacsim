@@ -57,6 +57,8 @@ DEFAULTS = {
     # (see ROBOT_PRESETS / go2_with_mid360.usd) -- see mid360.py.
     "mid360_topic": "livox/lidar",
     "mid360_frame_id": "livox_frame",
+    "mid360_imu_topic": "livox/imu",
+    "mid360_imu_frame_id": "livox_imu_frame",
 }
 
 # Order + display metadata for the settings window.
@@ -137,10 +139,12 @@ ROS2_TEXT_FIELDS = [
 
 # Mid-360 lidar settings window. Whether one gets published at all depends
 # on whether the loaded Robot USD has one (see ROBOT_PRESETS above) -- these
-# two fields are just its topic/frame naming.
+# fields name the lidar and its runtime physics IMU.
 MID360_TEXT_FIELDS = [
     ("mid360_topic", "PointCloud2 Topic", "Topic the Mid-360's PointCloud2 is published on, if the loaded Robot USD has one (only if ROS2 Bridge is also enabled)."),
     ("mid360_frame_id", "Frame Id", "TF frame id for the lidar (published as a child of the chassis frame, at its actual mount transform)."),
+    ("mid360_imu_topic", "IMU Topic", "sensor_msgs/Imu at the physics rate (200 Hz); acceleration in m/s^2 including gravity and angular velocity in rad/s."),
+    ("mid360_imu_frame_id", "IMU Frame Id", "Separate mount-aligned IMU frame, connected to the chassis by TF. Must differ from the lidar and chassis frame IDs."),
 ]
 
 

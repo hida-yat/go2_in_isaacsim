@@ -165,7 +165,8 @@ def _relative_transform(sensor_prim, reference_prim_path: str):
     translation = sensor_to_reference.ExtractTranslation()
     quat = sensor_to_reference.ExtractRotationQuat()
     imaginary = quat.GetImaginary()
-    return translation, (quat.GetReal(), imaginary[0], imaginary[1], imaginary[2])
+    # ROS2PublishRawTransformTree expects (x, y, z, w), not Gf's (w, x, y, z).
+    return translation, (imaginary[0], imaginary[1], imaginary[2], quat.GetReal())
 
 
 def publish_to_ros2(sensor_prim, robot_prim_path: str, chassis_frame: str) -> None:
