@@ -123,7 +123,10 @@ class Go2Example(BaseSample):
         self._physics_ready = False
         if not self.get_world().physics_callback_exists("physics_step"):
             self.get_world().add_physics_callback("physics_step", callback_fn=self.on_physics_step)
-        await self.get_world().play_async()
+        # Deliberately not auto-playing here (unlike the vendor Spot example
+        # this is adapted from): Load leaves the world paused, matching the
+        # documented "Load, then Play" workflow -- press Play in the
+        # viewport toolbar (or the timeline) when ready.
 
     async def setup_post_reset(self) -> None:
         self._physics_ready = False

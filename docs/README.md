@@ -7,6 +7,12 @@ using the same `PolicyController` base class as the built-in Spot Quadruped exam
 Open via **Isaac Examples > Policy > Go2**, click **Load**, then **Play**.
 Drive with arrow keys / numpad (same mapping as Spot).
 
+Isaac Sim's **Load** button only works once per stage -- clicking it again after
+changing something (in Preferences, or just wanting a fresh run) does nothing.
+Click **Clear World** (in this example's own panel, below Load/Reset) first --
+it closes the stage, which is what actually re-enables Load -- then **Load**
+again. (Equivalent to `File > New Stage`, just without leaving the panel.)
+
 ## Configuration
 
 Nothing here is hardcoded in Python. Open **Edit > Preferences > Go2 Policy Example**

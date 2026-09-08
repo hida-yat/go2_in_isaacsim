@@ -1,15 +1,42 @@
 # Adapted from isaacsim.examples.interactive.quadruped.quadruped_example_extension
 # Registers the Go2 example in the same "Isaac Examples" browser window as Spot.
 
+import asyncio
 import os
 
 import omni.ext
+import omni.ui as ui
 from isaacsim.examples.browser import get_instance as get_browser_instance
 from isaacsim.examples.interactive.base_sample import BaseSampleUITemplate
 from omni.kit.window.preferences import register_page, unregister_page
 
 from .go2_example import Go2Example
 from .preferences import Go2PolicyPreferences
+
+
+class Go2ExampleUITemplate(BaseSampleUITemplate):
+    """BaseSampleUITemplate's stock panel only has Load/Reset -- Load
+    disables itself after the first click and only re-enables when the
+    stage closes (see base_sample_extension.py's on_stage_event), so
+    picking up a Preferences change (a different Robot/Environment USD,
+    ROS2 settings, ...) otherwise means File > New Stage by hand, or
+    quitting and relaunching Isaac Sim entirely. Adds a "Clear World" button
+    that does that stage-close for you, in one click."""
+
+    def build_extra_frames(self):
+        with self.get_extra_frames_handle():
+            with ui.CollapsableFrame(title="Utilities", width=ui.Fraction(1), height=0, collapsed=False):
+                with ui.VStack(spacing=5, height=0):
+                    ui.Button(
+                        "Clear World",
+                        clicked_fn=self._on_clear_world,
+                        tooltip="Closes the stage so Load can be pressed again -- use this after changing"
+                        " Preferences (Robot/Environment USD, ROS2 settings, ...) to pick them up without"
+                        " restarting Isaac Sim.",
+                    )
+
+    def _on_clear_world(self):
+        asyncio.ensure_future(self._sample.clear_async())
 
 
 class Go2ExampleExtension(omni.ext.IExt):
@@ -34,9 +61,12 @@ class Go2ExampleExtension(omni.ext.IExt):
         overview += "\n\nOptional ROS2 bridge (Edit > Preferences > Go2 Policy Example > ROS2 Bridge):"
         overview += " subscribes cmd_vel to drive the robot (keyboard still overrides while a key is held),"
         overview += " and publishes odom, tf, joint_states, and /clock -- the topics nav2 expects from a mobile base."
-        overview += "\n\nOptional Mid-360 lidar (Edit > Preferences > Go2 Policy Example > Mid-360 Lidar):"
-        overview += " mounts an approximate Livox Mid-360 on the robot's head and, if ROS2 Bridge is also"
-        overview += " enabled, publishes it as a PointCloud2 with a static TF from the chassis frame."
+        overview += "\n\nOptional Mid-360 lidar: pick 'Go2 with Mid-360' from the Preset dropdown under"
+        overview += " Edit > Preferences > Go2 Policy Example > Assets > Robot USD, instead of the bare Go2."
+        overview += " If ROS2 Bridge is also enabled, it's published as a PointCloud2 with a TF at its"
+        overview += " actual mount transform."
+        overview += "\n\nAfter changing any Preferences, use the 'Clear World' button below (or File > New"
+        overview += " Stage) before Load to pick them up -- Isaac Sim's Load button only works once per stage."
 
         overview += "\n\nPress the 'Open in IDE' button to view the source code."
 
@@ -49,7 +79,7 @@ class Go2ExampleExtension(omni.ext.IExt):
             "sample": Go2Example(),
         }
 
-        ui_handle = BaseSampleUITemplate(**ui_kwargs)
+        ui_handle = Go2ExampleUITemplate(**ui_kwargs)
 
         get_browser_instance().register_example(
             name=self.example_name,
