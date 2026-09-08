@@ -88,6 +88,24 @@ FIELDS = [
     ),
 ]
 
+# Quick-pick presets for "environment_usd_path", shown as a dropdown above
+# that field in Preferences. Values starting with "/Isaac/" are resolved
+# against Isaac Sim's Nucleus assets root at Load time (see go2_example.py);
+# "Custom..." leaves the text field alone so a manually typed/browsed path
+# is never overwritten. These are Isaac Sim's own bundled sample
+# environments (isaacsim/standalone_examples reference the same paths), not
+# assets authored by this repo.
+ENVIRONMENT_PRESETS = [
+    ("Default Ground Plane", ""),
+    ("Grid - Default", "/Isaac/Environments/Grid/default_environment.usd"),
+    ("Grid Room (Black)", "/Isaac/Environments/Grid/gridroom_black.usd"),
+    ("Simple Room", "/Isaac/Environments/Simple_Room/simple_room.usd"),
+    ("Warehouse", "/Isaac/Environments/Simple_Warehouse/warehouse.usd"),
+    ("Warehouse (Full)", "/Isaac/Environments/Simple_Warehouse/full_warehouse.usd"),
+    ("Warehouse with Forklifts", "/Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd"),
+    ("Custom...", None),
+]
+
 # ROS2 bridge settings window: a single enable checkbox plus the topic/frame
 # names nav2 (or any other ROS2 client) needs to match. Left blank/False by
 # default so this extension behaves exactly as before unless turned on.
