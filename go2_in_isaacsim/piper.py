@@ -21,20 +21,35 @@ GRAPH_PATH = "/World/Go2PiperROS2"
 
 
 def find_arm(robot_prim_path: str, mount_name: str = "Piper"):
-    """Looks for the Piper's own articulation root, scoped to
-    {robot_prim_path}/{mount_name} -- not a whole-robot schema scan like
+    """Looks for the Piper's own articulation root, scoped to *the parent*
+    of robot_prim_path -- not a whole-robot schema scan like
     mid360.find_sensor(), because the arm is *itself* a second, independent
     PhysX articulation (its own ArticulationRootAPI, distinct from the
     chassis's) welded to the chassis by a fixed joint, and an unscoped scan
-    could just as easily return the chassis's own articulation root. The
-    mount is a *sibling* of the chassis's `base` prim, not its child --
-    `base` carries Go2's own ArticulationRootAPI, and PhysX forbids nesting
+    could just as easily return the chassis's own articulation root.
+
+    robot_prim_path is expected to be go2_example.py's self.go2.robot.prim_path
+    -- isaacsim.core.prims.SingleArticulation resolves that to the prim that
+    actually carries PhysicsArticulationRootAPI, i.e. Go2's `base` prim
+    (.../base), *not* the robot's outer Xform (.../Go2) callers might expect.
+    The Piper mount is a *sibling* of `base`, not its child -- `base`
+    already carries Go2's own ArticulationRootAPI, and PhysX forbids nesting
     one articulation root under another rigid body that's already part of
-    an articulation (see tools/build_go2_with_mid360_and_piper.py). Returns
-    None if the loaded Robot USD has no Piper mounted there (e.g. bare
-    go2.usd or go2_with_mid360.usd)."""
+    an articulation (see tools/build_go2_with_mid360_and_piper.py) -- so it
+    has to be looked up via base's *parent*, not a subtree scan of base
+    itself (which is exactly why this was silently returning None: an
+    earlier version scoped the lookup to {robot_prim_path}/{mount_name},
+    i.e. .../base/Piper, which never existed). Returns None if the loaded
+    Robot USD has no Piper mounted there (e.g. bare go2.usd or
+    go2_with_mid360.usd)."""
     stage = omni.usd.get_context().get_stage()
-    mount_prim = stage.GetPrimAtPath(f"{robot_prim_path}/{mount_name}")
+    robot_prim = stage.GetPrimAtPath(robot_prim_path)
+    if not robot_prim.IsValid():
+        return None
+    parent_prim = robot_prim.GetParent()
+    if not parent_prim.IsValid():
+        return None
+    mount_prim = stage.GetPrimAtPath(parent_prim.GetPath().AppendChild(mount_name))
     if not mount_prim.IsValid():
         return None
     for prim in Usd.PrimRange(mount_prim):
