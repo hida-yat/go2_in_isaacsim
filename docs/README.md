@@ -15,7 +15,10 @@ to point this extension at your own assets:
 - **Robot USD** — the Go2 USD to spawn. Defaults to the bare `go2.usd`; point this at a
   variant with sensors + an Action Graph added to bring those sensors along.
 - **Environment USD** — optional world/environment USD. Leave empty for the default
-  flat ground plane.
+  flat ground plane. The **Preset** dropdown right below it quick-fills this field
+  with one of Isaac Sim's own bundled sample environments (Grid, Simple Room,
+  Warehouse, ...), resolved against your Isaac Sim assets root at Load time; pick
+  **Custom...** to type/browse your own path instead.
 - **Policy (.pt)** / **Policy env.yaml** — the TorchScript checkpoint and its matching
   Isaac Lab `params/env.yaml` (joint gains, default pose, action/observation scales).
   A default checkpoint ships in `data/Policies/Go2/`.
@@ -64,6 +67,28 @@ with `ROS_VERSION`, `ROS_PYTHON_VERSION`, `ROS_DISTRO`, `AMENT_PREFIX_PATH`,
 to its own bundled, Python-3.11-matched internal `rclpy` -- the `ros2` CLI/nav2 in
 your normal ROS2 terminal are unaffected (DDS discovery doesn't care about Python
 versions), as long as `ROS_DOMAIN_ID`/`RMW_IMPLEMENTATION` still match.
+
+A convenient way to do this every time: add a small launcher function to your
+`.bashrc`/`.zshrc` that strips those variables right before starting Isaac Sim,
+and a one-word alias for this extension specifically:
+
+```bash
+isaac_run() {
+  # Unset ROS2 env vars so Isaac Sim's own bundled (Python-3.11-matched) rclpy
+  # loads instead of a system ROS2 install's (usually Python-3.10-built) one.
+  unset ROS_VERSION ROS_PYTHON_VERSION ROS_DISTRO AMENT_PREFIX_PATH \
+        COLCON_PREFIX_PATH PYTHONPATH CMAKE_PREFIX_PATH
+  "$HOME/isaacsim/isaac-sim.sh" "$@"
+}
+
+# Launches Isaac Sim with this extension enabled, via the clean launcher above.
+alias isaac_go2_run='isaac_run --enable go2_in_isaacsim'
+```
+
+(Adjust `$HOME/isaacsim` to your actual Isaac Sim install path.) After `source
+~/.bashrc`, `isaac_go2_run` opens Isaac Sim with `go2_in_isaacsim` enabled and a
+working ROS2 bridge, without needing to remember the `unset`/`--enable` incantation
+each time.
 
 ## Mid-360 lidar (optional)
 

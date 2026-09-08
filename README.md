@@ -33,6 +33,11 @@ Then in Isaac Sim:
 3. Drive with arrow keys / numpad (see the example's overview panel for the
    full key mapping).
 
+If you also have a system ROS2 install (e.g. `source /opt/ros/humble/setup.bash`
+in your shell rc file), see [`docs/README.md`](docs/README.md#ros2-bridge-optional-for-nav2)
+for a launcher shell function that avoids a Python-version conflict this causes
+with the ROS2 Bridge feature below.
+
 ## What's bundled
 
 - `data/Robots/Go2/usd/` — Go2 USD, sourced from
