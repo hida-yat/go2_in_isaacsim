@@ -16,13 +16,29 @@
 # mount Xform's transform (translate/rotate -- the real-world mount
 # offset/tilt, measured against the physical robot) if the file already
 # exists, so you don't need to remember or hardcode those numbers here.
+#
+# If something goes wrong, set BUILD_MID360_DEBUG_LOG=/some/path.log before
+# running for a step-by-step trace written straight to a file -- plain
+# print() output from a script like this is not reliably captured when
+# piping Isaac Sim's headless stdout (Kit's own logging pipeline can drop
+# unflushed buffers on shutdown, which cost real debugging time here once).
 
 import os
 import sys
 
+_DEBUG_LOG = os.environ.get("BUILD_MID360_DEBUG_LOG")
+
+
+def _debug(msg):
+    if _DEBUG_LOG:
+        with open(_DEBUG_LOG, "a") as f:
+            f.write(str(msg) + "\n")
+
+
 from isaacsim import SimulationApp
 
 simulation_app = SimulationApp({"headless": True})
+_debug("simulation app created")
 
 import omni.usd
 from pxr import Gf, Usd, UsdGeom
@@ -65,8 +81,11 @@ def _read_existing_mount_transform():
 
 
 def main():
+    _debug(f"mid360 module file: {mid360.__file__}")
+    _debug(f"create_sensor has orient fix: {'_SENSOR_ORIENT_FIX' in dir(mid360)}")
     mount_translate, mount_rotate_zyx = _read_existing_mount_transform()
     print(f"Mid360 mount transform: translate={mount_translate}  rotateZYX={mount_rotate_zyx}")
+    _debug(f"Mid360 mount transform: translate={mount_translate}  rotateZYX={mount_rotate_zyx}")
 
     # Build into a temp file in the same directory (so relative references
     # still resolve/serialize the same as the real output path would), and
@@ -112,25 +131,40 @@ def main():
     simulation_app.update()
 
     sensor_prim = mid360.create_sensor(name="Mid360Sensor", parent=MOUNT_PATH)
+    _debug(f"sensor_prim: {sensor_prim}")
     assert sensor_prim is not None and sensor_prim.IsValid()
     expected_sensor_path = f"{MOUNT_PATH}/Mid360Sensor"
     assert sensor_prim.GetPath().pathString == expected_sensor_path, (
         f"sensor landed at {sensor_prim.GetPath()}, expected {expected_sensor_path} "
         "(the replicator-API path/parent handling flattened it again -- see the comment above)"
     )
+    orient_attr = sensor_prim.GetAttribute("xformOp:orient")
+    _debug(f"sensor orient after create_sensor(): valid={orient_attr.IsValid()} value={orient_attr.Get() if orient_attr.IsValid() else None}")
     print(f"sensor created at {sensor_prim.GetPath()}, type={sensor_prim.GetTypeName()}")
 
-    assert usd_context.save_stage()
+    save_ok = usd_context.save_stage()
+    _debug(f"save_stage() returned: {save_ok}")
+    assert save_ok
     usd_context.close_stage()
     simulation_app.update()
+    _debug(f"about to replace {temp_path} -> {OUTPUT_PATH}")
     os.replace(temp_path, OUTPUT_PATH)
+    _debug("replace done")
     print(f"Saved {OUTPUT_PATH}")
 
 
 try:
     main()
+    _debug("main() completed without exception")
+except Exception as e:
+    _debug(f"main() raised: {type(e).__name__}: {e}")
+    raise
 finally:
     temp_path = OUTPUT_PATH + ".building.usd"
     if os.path.isfile(temp_path):
+        _debug(f"finally: removing leftover temp file {temp_path}")
         os.remove(temp_path)
+    else:
+        _debug("finally: no leftover temp file")
     simulation_app.close()
+    _debug("simulation_app closed")
