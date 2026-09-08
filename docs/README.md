@@ -185,6 +185,58 @@ root: `isaac_run tools/test_mid360_imu.py`. It uses a separate ROS domain and
 checks gravity in the tilted frame, angular velocity, timestamps, sampling
 with slower rendering, TF, and stop/restart behavior.
 
+## Piper arm (optional)
+
+Like Mid-360, this is a separate Robot USD, not a Preferences toggle:
+`data/Robots/Go2/usd/go2_with_mid360_and_piper.usd`. Pick **Go2 with Mid-360 +
+Piper** from the **Preset** dropdown under **Robot USD** in Preferences (or
+type/browse its path), then **Load** the example again.
+
+`go2_with_mid360_and_piper.usd` references `go2_with_mid360.usd` plus
+`data/Robots/Piper/usd/piper.usd` (a
+[Piper](https://github.com/agilexrobotics/piper_isaac_sim) arm with wrist
+camera, taken as-is from that repo's own URDF-import output — not re-derived),
+mounted as a **sibling** of the chassis's `base` prim, not a child of it: `base`
+carries Go2's own `PhysicsArticulationRootAPI` (the chassis+legs articulation),
+and PhysX forbids nesting one articulation root under another rigid body
+that's already part of an articulation. So Piper stays a *second*,
+independent PhysX articulation, welded to `base` by its own `root_joint` (a
+fixed joint, redirected from Piper's shipped "weld to world" to weld to
+Go2's `base` instead, at the mount offset/tilt). This also keeps the two
+robots' joint arrays separate -- `Go2FlatTerrainPolicy` indexes
+`robot.get_joint_positions()` positionally against its checkpoint's own
+12-leg-joint arrays (see `go2.py`), so merging Piper's 8 DOFs into that same
+articulation would have silently corrupted every observation/action term.
+
+Rebuild the file with `tools/build_go2_with_mid360_and_piper.py` (`isaac_run
+tools/build_go2_with_mid360_and_piper.py`) any time `data/Robots/Piper/usd/piper.usd`
+changes -- like the Mid-360 script, it preserves the existing file's mount
+position/tilt (set via the Isaac Sim UI's Transform properties on the `Piper`
+prim under `/go2_description`) so you don't need to remember or hardcode
+those numbers. The shipped default (`translate=(0, 0, 0.15)`, no rotation) is
+an approximate placeholder, not a measurement -- adjust it to your actual
+mounting bracket the same way the Mid-360 mount position was measured.
+
+If **ROS2 Bridge** is also enabled and the loaded Robot USD has a Piper (found
+by scanning `{robot}/Piper` for an articulation root, so this works on any
+Robot USD with one mounted there), its `joint_states` are published (topic
+`piper/joint_states`) and it's driven from `joint_command` (topic
+`piper/joint_command`, `sensor_msgs/JointState` -- position/velocity/effort by
+joint name) via the same `ROS2PublishJointState` +
+`ROS2SubscribeJointState` + `IsaacArticulationController` node combination
+`isaacsim.ros2.bridge`'s own "ROS2 > Joint States" graph shortcut uses. Topics
+are configurable as **Piper Joint States/Command Topic** in **Piper Arm**
+preferences, kept distinct from the chassis's own `joint_states` topic so
+the two don't collide on the same name. If the loaded Robot USD has no Piper
+(e.g. `go2.usd` or `go2_with_mid360.usd`), this is silently skipped.
+
+This extension deliberately stops at `joint_states`/`joint_command` -- the
+same boundary the Mid-360/nav2 and ROS2 Bridge/cmd_vel integrations use
+elsewhere in this repo (expose the standard topics, let the ROS2-side stack
+do the rest). A `FollowJointTrajectory`-to-`joint_command` bridge for
+`moveit_simple_controller_manager` (or any other ROS2 MoveIt setup) belongs
+in your own separate ROS2 workspace, not in this extension.
+
 ## Notes for redistribution
 
 - The bundled default checkpoint came from

@@ -65,6 +65,9 @@ class Go2ExampleExtension(omni.ext.IExt):
         overview += " Edit > Preferences > Go2 Policy Example > Assets > Robot USD, instead of the bare Go2."
         overview += " If ROS2 Bridge is also enabled, it's published as a PointCloud2 with a TF at its"
         overview += " actual mount transform."
+        overview += "\n\nOptional Piper arm: pick 'Go2 with Mid-360 + Piper' from that same Preset dropdown."
+        overview += " If ROS2 Bridge is also enabled, its joint_states are published and it's driven from"
+        overview += " joint_command -- e.g. from a MoveIt FollowJointTrajectory-to-topic bridge."
         overview += "\n\nAfter changing any Preferences, use the 'Clear World' button below (or File > New"
         overview += " Stage) before Load to pick them up -- Isaac Sim's Load button only works once per stage."
 

@@ -7,7 +7,7 @@ import omni
 import omni.appwindow  # Contains handle to keyboard
 from isaacsim.examples.interactive.base_sample import BaseSample
 
-from . import imu, mid360, ros2_bridge, settings
+from . import imu, mid360, piper, ros2_bridge, settings
 from .go2 import Go2FlatTerrainPolicy
 
 
@@ -110,6 +110,15 @@ class Go2Example(BaseSample):
                         "Go2 Policy Example: this Robot USD has a Mid-360 lidar but "
                         "isaacsim.sensors.rtx could not be enabled. Skipping its ROS2 publish."
                     )
+
+            # Same idea for a Piper arm (see ROBOT_PRESETS /
+            # go2_with_mid360_and_piper.usd): it's a second, independent
+            # articulation welded to the chassis, not something this example
+            # mounts -- just published (and driven from joint_command) if
+            # the loaded robot has one.
+            arm_prim = piper.find_arm(self.go2.robot.prim_path)
+            if arm_prim is not None:
+                piper.publish_to_ros2(arm_prim)
 
         timeline = omni.timeline.get_timeline_interface()
         self._event_timer_callback = timeline.get_timeline_event_stream().create_subscription_to_pop_by_type(

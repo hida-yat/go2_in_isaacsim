@@ -68,6 +68,16 @@ class Go2PolicyPreferences(PreferenceBuilder):
                     )
                     for key, label, tooltip in settings.MID360_TEXT_FIELDS:
                         self._build_text_row(key, label, tooltip)
+            with self.add_frame("Piper Arm"):
+                with ui.VStack(height=0, spacing=5):
+                    ui.Label(
+                        "Whether a Piper arm gets published depends on the loaded Robot USD above"
+                        " (pick 'Go2 with Mid-360 + Piper' there) -- these just name its topics.",
+                        word_wrap=True,
+                        height=0,
+                    )
+                    for key, label, tooltip in settings.PIPER_TEXT_FIELDS:
+                        self._build_text_row(key, label, tooltip)
             ui.Spacer(height=ui.Fraction(1))
 
     def _build_path_row(self, key: str, label: str, tooltip: str) -> ui.StringField:

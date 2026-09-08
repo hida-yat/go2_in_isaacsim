@@ -59,6 +59,12 @@ DEFAULTS = {
     "mid360_frame_id": "livox_frame",
     "mid360_imu_topic": "livox/imu",
     "mid360_imu_frame_id": "livox_imu_frame",
+    # Piper arm: like Mid-360, purely a topic naming choice -- whether one is
+    # actually there depends on the loaded Robot USD (go2_with_mid360_and_piper.usd)
+    # -- see piper.py. Distinct from ros2_joint_states_topic ("joint_states"):
+    # the arm is a second, independent articulation, not part of the chassis's.
+    "piper_joint_states_topic": "piper/joint_states",
+    "piper_joint_command_topic": "piper/joint_command",
 }
 
 # Order + display metadata for the settings window.
@@ -111,6 +117,7 @@ ENVIRONMENT_PRESETS = [
 ROBOT_PRESETS = [
     ("Go2 (bare)", _DEFAULT_ROBOT_USD_PATH),
     ("Go2 with Mid-360", os.path.join(_EXT_ROOT, "data", "Robots", "Go2", "usd", "go2_with_mid360.usd")),
+    ("Go2 with Mid-360 + Piper", os.path.join(_EXT_ROOT, "data", "Robots", "Go2", "usd", "go2_with_mid360_and_piper.usd")),
     ("Custom...", None),
 ]
 
@@ -145,6 +152,13 @@ MID360_TEXT_FIELDS = [
     ("mid360_frame_id", "Frame Id", "TF frame id for the lidar (published as a child of the chassis frame, at its actual mount transform)."),
     ("mid360_imu_topic", "IMU Topic", "sensor_msgs/Imu at the physics rate (200 Hz); acceleration in m/s^2 including gravity and angular velocity in rad/s."),
     ("mid360_imu_frame_id", "IMU Frame Id", "Separate mount-aligned IMU frame, connected to the chassis by TF. Must differ from the lidar and chassis frame IDs."),
+]
+
+# Piper arm settings window. Whether one gets published at all depends on
+# whether the loaded Robot USD has one (see ROBOT_PRESETS above).
+PIPER_TEXT_FIELDS = [
+    ("piper_joint_states_topic", "Joint States Topic", "sensor_msgs/JointState telemetry for the arm, if the loaded Robot USD has one."),
+    ("piper_joint_command_topic", "Joint Command Topic", "sensor_msgs/JointState (position/velocity/effort by joint name) that drives the arm -- e.g. from a FollowJointTrajectory-to-topic bridge on the MoveIt side."),
 ]
 
 
