@@ -109,17 +109,26 @@ What you see is what's actually sensing -- the same prim carries the visual mesh
 and the lidar API, not an invisible sensor mounted separately in Python.
 
 `go2_with_mid360.usd` references `go2.usd` plus `data/Sensors/Mid360/Mid360.usd`
-(a real Mid-360 CAD model, converted from a STEP file to USD), mounted on
-`base` at an approximate head-top offset (measure your actual bracket and rebuild
-if you need it exact -- see `go2_in_isaacsim/mid360.py`'s module docstring for how
-this file was built). An RTX Lidar sensor API is applied to a small `Camera` prim
-alongside the visual mesh, using a custom scan profile
-(`data/lidar_configs/Livox/Mid360.json`) approximating the real Mid-360's headline
+(a real Mid-360 CAD model, converted from a STEP file to USD) mounted on `base`,
+plus a native `OmniLidar` sensor prim (same prim type Isaac Sim's own bundled
+Velodyne/Ouster/etc. assets use) alongside it, with a custom scan pattern
+(`go2_in_isaacsim/mid360.py`'s `_mid360_attrs()`, 40 evenly-spaced vertical
+channels swept through a full rotation) approximating the real Mid-360's headline
 spec -- 360deg horizontal x -7..+52deg vertical FOV, ~40m range, ~200,000
-points/sec, 905nm -- since Isaac Sim doesn't ship an official Mid-360 profile (only
-Velodyne/Ouster/Hesai/SICK/etc.). It's built from 40 evenly-spaced vertical
-channels swept through a full rotation, so it matches the Mid-360's FOV/range
-envelope but **not** its actual non-repetitive (rosette) scan pattern.
+points/sec, 905nm -- since Isaac Sim doesn't ship an official Mid-360 profile.
+This matches the Mid-360's FOV/range envelope but **not** its actual
+non-repetitive (rosette) scan pattern. (An earlier version of this file used a
+`Camera` prim + a JSON profile file instead -- that mechanism turned out not to
+produce any points at all in this Isaac Sim version; see the top of `mid360.py`
+for how this was diagnosed.)
+
+Rebuild the file with `tools/build_go2_with_mid360.py` (needs Isaac Sim's own
+Python: `isaac_run tools/build_go2_with_mid360.py`, or `./python.sh
+tools/build_go2_with_mid360.py` from the Isaac Sim install dir) any time
+`data/Sensors/Mid360/Mid360.usd` changes -- it preserves the existing file's
+mount position/tilt (the real-world offset measured against the physical robot
+and set via the Isaac Sim UI's Transform properties on the `Mid360` prim under
+`base`), so you don't need to remember or hardcode those numbers.
 
 If **ROS2 Bridge** is also enabled and the loaded Robot USD has a Mid-360 (found
 by scanning for the RTX Lidar API, so this works on any Robot USD that has one,

@@ -44,16 +44,14 @@ with the ROS2 Bridge feature below.
   [unitree_model](https://github.com/unitreerobotics/unitree_model)'s
   `Go2/usd/` (converted from Unitree's URDF). Not modified.
 - `data/Robots/Go2/usd/go2_with_mid360.usd` — the same robot with a Mid-360
-  lidar mounted on its head, authored for this repo (references `go2.usd` and
-  `data/Sensors/Mid360/Mid360.usd` below; see
-  [Mid-360 lidar](docs/README.md#mid-360-lidar-optional) in `docs/README.md`).
+  lidar mounted on its head (references `go2.usd` and
+  `data/Sensors/Mid360/Mid360.usd` below), built by
+  `tools/build_go2_with_mid360.py`; see
+  [Mid-360 lidar](docs/README.md#mid-360-lidar-optional) in `docs/README.md`.
 - `data/Sensors/Mid360/Mid360.usd` — a Livox Mid-360 CAD model, converted from
   a STEP file (`Isaac Sim`'s built-in CAD Converter) to USD for this repo.
 - `data/Policies/Go2/` — a `unitree_rl_lab`-trained flat-terrain velocity
   policy (`policy.pt` + the matching Isaac Lab `params/env.yaml`).
-- `data/lidar_configs/Livox/Mid360.json` — a custom RTX Lidar profile
-  approximating the Livox Mid-360's spec (Isaac Sim ships no official one).
-  Authored for this repo, not a Livox/Unitree asset.
 
 The Go2 and Mid-360 models are third-party artifacts, not authored by this
 repo. No license file is included here yet; check the terms of the upstream

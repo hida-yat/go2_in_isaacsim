@@ -1,52 +1,93 @@
-# Publishes a Mid-360 lidar -- baked into a Robot USD such as the bundled
-# go2_with_mid360.usd (see data/Robots/Go2/usd/go2_with_mid360.usd, built
-# from go2.usd + data/Sensors/Mid360/Mid360.usd, a real Mid-360 CAD model
-# converted to USD, with an RTX Lidar sensor API applied) -- as a ROS2
-# PointCloud2, if one is present on the currently loaded robot.
-#
-# This does NOT mount a sensor at runtime: the sensor is part of the Robot
-# USD itself (visual geometry + lidar API on the same prim tree, so what you
-# see is what's actually sensing). go2.usd (bare) and go2_with_mid360.usd are
-# separate files -- pick one via Edit > Preferences > Go2 Policy Example >
-# Assets > Robot USD (or its Preset dropdown) -- rather than every Robot USD
-# silently growing a lidar. find_sensor() below just looks for one.
+# Creates a Mid-360-approximate RTX Lidar (create_sensor, used by
+# tools/build_go2_with_mid360.py to bake one into a Robot USD) and publishes
+# whichever one is on the loaded robot as a ROS2 PointCloud2, if any
+# (find_sensor + publish_to_ros2, called from go2_example.py).
 #
 # There is no official Mid-360 profile bundled with Isaac Sim's RTX Lidar
 # (isaacsim.sensors.rtx/data/lidar_configs/ has Velodyne/Ouster/Hesai/SICK/...
-# but no Livox), so this ships a custom profile (data/lidar_configs/Livox/
-# Mid360.json, "rotary" scanType) matching the real sensor's headline specs
-# -- 360deg horizontal x -7..+52deg vertical FOV, ~40m range, ~200,000
-# points/sec, 905nm -- using 40 evenly-spaced vertical channels swept through
-# a full rotation. This is an envelope match, not a reproduction of the real
+# but no Livox), so MID360_ATTRS below defines a custom scan pattern
+# matching the real sensor's headline specs -- 360deg horizontal x -7..+52deg
+# vertical FOV, ~40m range, ~200,000 points/sec, 905nm -- using 40
+# evenly-spaced vertical channels swept through a full rotation ("ROTARY"
+# scanType). This is an envelope match, not a reproduction of the real
 # Mid-360's non-repetitive (rosette) scan pattern.
+#
+# IMPORTANT: the sensor is created as a native OmniLidar prim (via
+# omni.kit.commands "IsaacSensorCreateRtxLidar" with no config, which falls
+# through to rep.functional.create.omni_lidar internally) with our scan
+# parameters authored directly as omni:sensor:Core:* attributes -- the same
+# mechanism used to build Isaac Sim's own bundled Nucleus lidar assets
+# (Velodyne/Ouster/...). An earlier version of this file instead created a
+# plain Camera prim with IsaacRtxLidarSensorAPI applied and a
+# "sensorModelConfig" string naming a JSON profile file
+# (force_camera_prim=True, the isaacsim.sensors.rtx command's deprecated
+# fallback for configs outside its hardcoded Nucleus-asset list) -- that path
+# produced *zero* rays in this Isaac Sim version, verified by comparing
+# against a real, working Nucleus lidar asset in a headless ray-cast test
+# (a box at a known position was correctly hit by ~47% of returned points
+# with this native approach; the Camera+sensorModelConfig approach returned
+# no points at all, for either our own profile or a known-good vendor one).
 
-import os
-
-import carb.settings
 import omni.graph.core as og
 import omni.usd
 from pxr import Usd, UsdGeom
 
 from . import settings
 
-_CONFIG_NAME = "Mid360"
-_CONFIG_DIR = os.path.join(settings.EXT_ROOT, "data", "lidar_configs", "Livox")
-_PROFILE_SEARCH_PATH_SETTING = "/app/sensors/nv/lidar/profileBaseFolder"
-_LIDAR_API = "IsaacRtxLidarSensorAPI"
+_NUM_CHANNELS = 40
+_ELEVATION_MIN_DEG = -7.0
+_ELEVATION_MAX_DEG = 52.0
+_SCAN_RATE_HZ = 10.0
+_REPORT_RATE_HZ = 5000  # total point rate = report rate * channels = ~200,000 pts/sec
+
+_LIDAR_APIS = ("IsaacRtxLidarSensorAPI", "OmniSensorGenericLidarCoreAPI")
 
 GRAPH_PATH = "/World/Go2Mid360ROS2"
 
 
-def _ensure_profile_search_path() -> None:
-    """Adds this extension's data/lidar_configs/Livox/ to the RTX lidar
-    plugin's profile search path (additive -- preserves Isaac Sim's own
-    vendor config directories already registered there). Only matters if the
-    loaded Robot USD actually has a Mid-360 sensor using this config name."""
-    s = carb.settings.get_settings()
-    current = list(s.get(_PROFILE_SEARCH_PATH_SETTING) or [])
-    if _CONFIG_DIR not in current:
-        current.append(_CONFIG_DIR)
-        s.set(_PROFILE_SEARCH_PATH_SETTING, current)
+def _mid360_attrs() -> dict:
+    """omni:sensor:Core:* attributes for a 40-channel rotary approximation of
+    the Mid-360, in the exact form isaacsim.sensors.rtx's own bundled lidar
+    assets (e.g. Velodyne_VLS128, Example_Rotary) use natively."""
+    elevations = [
+        round(_ELEVATION_MIN_DEG + (_ELEVATION_MAX_DEG - _ELEVATION_MIN_DEG) * i / (_NUM_CHANNELS - 1), 3)
+        for i in range(_NUM_CHANNELS)
+    ]
+    report_period_ns = 1e9 / _REPORT_RATE_HZ
+    fire_times = [round(report_period_ns * i / _NUM_CHANNELS) for i in range(_NUM_CHANNELS)]
+    zeros = [0.0] * _NUM_CHANNELS
+    return {
+        "omni:sensor:Core:scanType": "ROTARY",
+        "omni:sensor:Core:rayType": "IDEALIZED",
+        "omni:sensor:Core:nearRangeM": 0.1,
+        "omni:sensor:Core:farRangeM": 40.0,
+        "omni:sensor:Core:rangeResolutionM": 0.002,
+        "omni:sensor:Core:rangeAccuracyM": 0.02,
+        "omni:sensor:Core:avgPowerW": 0.002,
+        "omni:sensor:Core:minReflectance": 0.1,
+        "omni:sensor:Core:waveLengthNm": 905.0,
+        "omni:sensor:Core:pulseTimeNs": 4,
+        "omni:sensor:Core:maxReturns": 1,
+        "omni:sensor:Core:scanRateBaseHz": _SCAN_RATE_HZ,
+        "omni:sensor:Core:reportRateBaseHz": _REPORT_RATE_HZ,
+        "omni:sensor:Core:numberOfEmitters": _NUM_CHANNELS,
+        "omni:sensor:Core:numberOfChannels": _NUM_CHANNELS,
+        "omni:sensor:Core:intensityMappingType": "LINEAR",
+        "omni:sensor:Core:rotationDirection": "CW",
+        "omni:sensor:Core:intensityProcessing": "NORMALIZATION",
+        "omni:sensor:Core:skipDroppingInvalidPoints": True,
+        "omni:sensor:Core:startAzimuthOffsetDeg": 0.0,
+        "omni:sensor:modelName": "Mid360",
+        "omni:sensor:Core:emitterState:s001:azimuthDeg": [0.0] * _NUM_CHANNELS,
+        "omni:sensor:Core:emitterState:s001:elevationDeg": elevations,
+        "omni:sensor:Core:emitterState:s001:fireTimeNs": fire_times,
+        "omni:sensor:Core:emitterState:s001:channelId": list(range(1, _NUM_CHANNELS + 1)),
+        "omni:sensor:Core:emitterState:s001:distanceCorrectionM": zeros,
+        "omni:sensor:Core:emitterState:s001:focalDistM": zeros,
+        "omni:sensor:Core:emitterState:s001:focalSlope": zeros,
+        "omni:sensor:Core:emitterState:s001:horOffsetM": zeros,
+        "omni:sensor:Core:emitterState:s001:vertOffsetM": zeros,
+    }
 
 
 def is_available() -> bool:
@@ -60,16 +101,41 @@ def is_available() -> bool:
         return False
 
 
+def create_sensor(name: str, parent: str):
+    """Creates the Mid-360 sensor prim (native OmniLidar, see module
+    docstring) named `name` under `parent`, at that parent's local origin
+    (identity transform -- no pose kwargs are passed, so no xformOps get
+    authored at all, leaving the prim to simply inherit its parent's
+    transform as-is). Local identity means azimuth 0deg/elevation 0deg
+    points along local +X with +Z up -- the same convention Isaac Sim's own
+    bundled lidar assets use, so no extra fixed correction is needed here.
+
+    Uses omni.replicator.core's functional API directly rather than the
+    omni.kit.commands "IsaacSensorCreateRtxLidar" wrapper: that wrapper
+    joins `path` and `parent` into one nested path before falling through to
+    this same underlying call, then passes the *whole joined path* as the
+    prim's `name` -- name may not itself contain a "/", so this gets
+    rejected and silently flattened into a mangled prim at the wrong
+    location. Calling the functional API directly avoids that bug entirely.
+    """
+    import omni.replicator.core as rep
+
+    prim = rep.functional.create.omni_lidar(name=name, parent=parent, **_mid360_attrs())
+    return prim
+
+
 def find_sensor(robot_prim_path: str):
-    """Looks for an RTX Lidar sensor (a prim with IsaacRtxLidarSensorAPI
-    applied) anywhere under the loaded robot. Returns the first one found,
-    or None if the loaded Robot USD doesn't have one (e.g. bare go2.usd)."""
+    """Looks for an RTX Lidar sensor anywhere under the loaded robot --
+    either convention (native OmniLidar, or the older Camera+
+    IsaacRtxLidarSensorAPI style some Nucleus assets still use). Returns the
+    first one found, or None if the loaded Robot USD doesn't have one (e.g.
+    bare go2.usd)."""
     stage = omni.usd.get_context().get_stage()
     robot_prim = stage.GetPrimAtPath(robot_prim_path)
     if not robot_prim.IsValid():
         return None
     for prim in Usd.PrimRange(robot_prim):
-        if prim.HasAPI(_LIDAR_API):
+        if any(prim.HasAPI(api) for api in _LIDAR_APIS):
             return prim
     return None
 
@@ -97,8 +163,6 @@ def publish_to_ros2(sensor_prim, robot_prim_path: str, chassis_frame: str) -> No
     actual transform -- see _relative_transform -- on the same tf topic as
     ros2_bridge.py's world->odom->chassis chain, so it shows up connected to
     the rest of the tree)."""
-    _ensure_profile_search_path()
-
     stage = omni.usd.get_context().get_stage()
     if stage.GetPrimAtPath(GRAPH_PATH).IsValid():
         stage.RemovePrim(GRAPH_PATH)
