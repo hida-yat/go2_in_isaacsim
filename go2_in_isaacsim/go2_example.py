@@ -157,7 +157,7 @@ class Go2Example(BaseSample):
             self._physics_ready = True
             self.go2.initialize()
             self.go2.post_reset()
-            self.go2.robot.set_joints_default_state(self.go2.default_pos)
+            self.go2.set_default_state()
 
     def _sub_keyboard_event(self, event, *args, **kwargs) -> bool:
         if event.type == carb.input.KeyboardEventType.KEY_PRESS:
