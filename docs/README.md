@@ -235,7 +235,66 @@ same boundary the Mid-360/nav2 and ROS2 Bridge/cmd_vel integrations use
 elsewhere in this repo (expose the standard topics, let the ROS2-side stack
 do the rest). A `FollowJointTrajectory`-to-`joint_command` bridge for
 `moveit_simple_controller_manager` (or any other ROS2 MoveIt setup) belongs
-in your own separate ROS2 workspace, not in this extension.
+in your own separate ROS2 workspace, not in this extension (a companion
+`piper_isaacsim` ROS2 package -- `topic_based_ros2_control` bridged to these
+same two topics -- does exactly this outside this repo).
+
+The bundled Piper USD's own auto-authored gripper drive gains (joint7/joint8)
+were ~150x weaker than the arm's, relative to their own units -- `piper.py`'s
+`_boost_gripper_drive_gains` raises them (`_GRIPPER_DRIVE_STIFFNESS`/
+`_GRIPPER_DRIVE_DAMPING`) whenever `publish_to_ros2` runs; without this the
+gripper barely moves regardless of what position is commanded.
+
+### Hardware-compatible raw interface
+
+Separate from `piper/joint_states`/`piper/joint_command` above, `piper.py`
+also builds a second, additive interface (`piper.HardwareCompatibleBridge`)
+matching piper_ros's actual real-hardware driver
+(`piper_ctrl_single_node.py`) exactly: a 7-element `sensor_msgs/JointState`,
+`name=['joint1'..'joint6','gripper']`, with the gripper as *one* combined
+value (real hardware has no joint7/joint8 split) read/written by array
+*index* (`position[6]`), not by name -- matching that driver's own
+`joint_callback()`. Default topics are **joint_states_single** (publish) and
+**joint_command** (subscribe), configurable in **Piper Arm** preferences.
+This exists so ROS2 code written against real Piper hardware (e.g.
+piper_ros's own `joy_to_piper_joint_states`) runs against Isaac Sim
+unmodified.
+
+This is the only place in this extension that uses a plain `rclpy` Node
+instead of OmniGraph (neither `ROS2PublishJointState` nor
+`ROS2SubscribeJointState` can remap/combine joint names the way the gripper
+combining needs). Known limitations: it shares whichever *global default*
+rclpy context `isaacsim.ros2.bridge` itself already initialized (plain
+`ROS_DOMAIN_ID` from the environment) -- unlike every OmniGraph pipeline in
+this extension, it does **not** honor a non-empty **Domain ID** override in
+ROS2 Bridge preferences. Both interfaces can be wired up at once (real
+hardware users don't run `piper_single_ctrl` and Gazebo/MoveIt against the
+same arm simultaneously either) -- just don't send commands on both at the
+same time, or whichever write lands last each tick wins.
+
+## Piper RealSense (D435) (optional)
+
+The bundled Piper USD's wrist-mounted D435 mount
+(`Piper/link6/d435_camera_link`) is purely decorative mesh -- no `Camera`
+prim or optical-frame links at all. If **ROS2 Bridge** is enabled and the
+loaded Robot USD has that mount, `realsense.py` creates the actual `Camera`
+prim (once, reused across re-Loads) and publishes:
+
+- **RGB Topic** (default `realsense/color/image_raw`, `rgb8`)
+- **Depth Topic** (default `realsense/depth/image_rect_raw`, `32FC1`, meters)
+- **Camera Info Topic** (default `realsense/color/camera_info`) -- shared by
+  both streams since they come from the same render product (one simulated
+  camera), so they're inherently pixel-aligned already.
+
+Configurable (topic names, frame id, resolution) in **Piper RealSense
+(D435)** preferences. The camera's orientation relative to the mesh mount
+(`realsense.py`'s `_CAMERA_ORIENT`) was tuned by trial and error against the
+actual viewport output (not derived from a documented spec) -- if you swap in
+a different Piper USD variant with a different camera mesh, re-check it.
+No TF is published for the camera frame (or for any Piper arm link) by this
+extension -- if you need `d435_color_optical_frame` connected to the rest of
+the TF tree, that's a `robot_state_publisher` fed from `piper/joint_states`
+in your own ROS2 workspace, same boundary as the MoveIt bridge note above.
 
 ## Notes for redistribution
 

@@ -65,6 +65,25 @@ DEFAULTS = {
     # the arm is a second, independent articulation, not part of the chassis's.
     "piper_joint_states_topic": "piper/joint_states",
     "piper_joint_command_topic": "piper/joint_command",
+    # Separate, additive raw interface matching piper_ros's actual real-hardware
+    # driver (piper_ctrl_single_node.py) exactly -- 7-element JointState with a
+    # single combined "gripper" DOF instead of joint7/joint8 separately -- so
+    # ROS2 code written against real Piper hardware runs against this
+    # unmodified. See piper.py's HardwareCompatibleBridge.
+    "piper_hw_joint_states_topic": "joint_states_single",
+    "piper_hw_joint_command_topic": "joint_command",
+    # Piper's wrist-mounted D435 RealSense: purely decorative mesh in the
+    # bundled Piper USD (no Camera prim at all) until realsense.py creates
+    # one -- see its module docstring. Topic naming loosely follows
+    # realsense2_camera's own convention (color/, depth/); RGB and Depth
+    # share one render product (same simulated camera prim) so they're
+    # inherently pixel-aligned already and one camera_info covers both.
+    "realsense_rgb_topic": "realsense/color/image_raw",
+    "realsense_depth_topic": "realsense/depth/image_rect_raw",
+    "realsense_camera_info_topic": "realsense/color/camera_info",
+    "realsense_frame_id": "d435_color_optical_frame",
+    "realsense_width": "640",
+    "realsense_height": "480",
 }
 
 # Order + display metadata for the settings window.
@@ -159,6 +178,28 @@ MID360_TEXT_FIELDS = [
 PIPER_TEXT_FIELDS = [
     ("piper_joint_states_topic", "Joint States Topic", "sensor_msgs/JointState telemetry for the arm, if the loaded Robot USD has one."),
     ("piper_joint_command_topic", "Joint Command Topic", "sensor_msgs/JointState (position/velocity/effort by joint name) that drives the arm -- e.g. from a FollowJointTrajectory-to-topic bridge on the MoveIt side."),
+    (
+        "piper_hw_joint_states_topic",
+        "Hardware-Compatible Joint States Topic",
+        "sensor_msgs/JointState telemetry matching piper_ros's real-hardware driver exactly (joint1..6 + one combined 'gripper' DOF), separate from Joint States Topic above.",
+    ),
+    (
+        "piper_hw_joint_command_topic",
+        "Hardware-Compatible Joint Command Topic",
+        "sensor_msgs/JointState command matching piper_ros's real-hardware driver exactly (position[6] is a single combined gripper value, mirrored internally to both gripper fingers).",
+    ),
+]
+
+# Piper's wrist-mounted D435 RealSense settings window. Whether one gets
+# published at all depends on whether the loaded Robot USD has a Piper with
+# that camera mesh mounted (see ROBOT_PRESETS above) -- see realsense.py.
+REALSENSE_TEXT_FIELDS = [
+    ("realsense_rgb_topic", "RGB Topic", "sensor_msgs/Image (rgb8) from the D435's color stream."),
+    ("realsense_depth_topic", "Depth Topic", "sensor_msgs/Image (32FC1, meters) from the D435's depth stream. Pixel-aligned with RGB (same simulated camera)."),
+    ("realsense_camera_info_topic", "Camera Info Topic", "sensor_msgs/CameraInfo, shared by both RGB and Depth (same render product, so the same intrinsics apply to both)."),
+    ("realsense_frame_id", "Frame Id", "TF frame id for the camera optical frame, in image headers."),
+    ("realsense_width", "Width (px)", "Rendered image width."),
+    ("realsense_height", "Height (px)", "Rendered image height."),
 ]
 
 

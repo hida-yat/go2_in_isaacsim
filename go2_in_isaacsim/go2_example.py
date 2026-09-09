@@ -7,7 +7,7 @@ import omni
 import omni.appwindow  # Contains handle to keyboard
 from isaacsim.examples.interactive.base_sample import BaseSample
 
-from . import imu, mid360, piper, ros2_bridge, settings
+from . import imu, mid360, piper, realsense, ros2_bridge, settings
 from .go2 import Go2FlatTerrainPolicy
 
 
@@ -25,6 +25,12 @@ class Go2Example(BaseSample):
         self._ros2_enabled = False
         self._ros2_twist_node = None
         self._cmd_vel_command = np.zeros(3)
+        # Set in setup_scene once the loaded Robot USD is known; consumed by
+        # on_physics_step's first-tick branch, which needs an *initialized*
+        # articulation before piper.build_hardware_compatible_bridge can read
+        # self.go2.robot.dof_names -- see piper.py.
+        self._piper_present = False
+        self._piper_hw_bridge = None
 
         # bindings for keyboard to command, same layout as the Spot example.
         # Magnitudes are kept inside this checkpoint's trained command ranges
@@ -84,6 +90,7 @@ class Go2Example(BaseSample):
 
         self._ros2_enabled = settings.get("ros2_enabled") == "True"
         self._ros2_twist_node = None
+        self._piper_present = False
         if self._ros2_enabled:
             if ros2_bridge.is_available():
                 self._ros2_twist_node = ros2_bridge.build_graph(self.go2.robot.prim_path)
@@ -117,8 +124,17 @@ class Go2Example(BaseSample):
             # mounts -- just published (and driven from joint_command) if
             # the loaded robot has one.
             arm_prim = piper.find_arm(self.go2.robot.prim_path)
+            self._piper_present = arm_prim is not None
             if arm_prim is not None:
                 piper.publish_to_ros2(arm_prim)
+
+            # Piper's wrist-mounted D435 RealSense (see ROBOT_PRESETS /
+            # go2_with_mid360_and_piper.usd): purely decorative mesh until
+            # realsense.publish_to_ros2 creates the actual Camera prim --
+            # see realsense.py's module docstring.
+            camera_mount_prim = realsense.find_sensor(self.go2.robot.prim_path)
+            if camera_mount_prim is not None:
+                realsense.publish_to_ros2(camera_mount_prim)
 
         timeline = omni.timeline.get_timeline_interface()
         self._event_timer_callback = timeline.get_timeline_event_stream().create_subscription_to_pop_by_type(
@@ -153,11 +169,17 @@ class Go2Example(BaseSample):
             # (0 if ROS2 is disabled or nothing has been published yet).
             command = self._base_command if self._keys_active else self._cmd_vel_command
             self.go2.forward(step_size, command)
+            if self._piper_hw_bridge is not None:
+                self._piper_hw_bridge.step()
         else:
             self._physics_ready = True
             self.go2.initialize()
             self.go2.post_reset()
             self.go2.set_default_state()
+            # Needs an *initialized* articulation (self.go2.robot.dof_names)
+            # -- can't build this in setup_scene like publish_to_ros2 above.
+            if self._ros2_enabled and self._piper_present and self._piper_hw_bridge is None:
+                self._piper_hw_bridge = piper.build_hardware_compatible_bridge(self.go2.robot)
 
     def _sub_keyboard_event(self, event, *args, **kwargs) -> bool:
         if event.type == carb.input.KeyboardEventType.KEY_PRESS:
@@ -178,5 +200,8 @@ class Go2Example(BaseSample):
 
     def world_cleanup(self):
         self._event_timer_callback = None
+        if self._piper_hw_bridge is not None:
+            self._piper_hw_bridge.shutdown()
+            self._piper_hw_bridge = None
         if self._world.physics_callback_exists("physics_step"):
             self._world.remove_physics_callback("physics_step")

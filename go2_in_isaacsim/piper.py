@@ -19,6 +19,17 @@ from . import settings
 
 GRAPH_PATH = "/World/Go2PiperROS2"
 
+# The bundled Piper USD's own auto-authored gripper (joint7/joint8, prismatic
+# finger joints) drive gains are ~150x weaker than the arm's per their own
+# units (stiffness ~0.19 N/m vs the arm's 8-60 N*m/rad) -- almost certainly an
+# artifact of whatever auto-computed them from the fingers' tiny mass/inertia
+# at import time. maxForce is already a reasonable 100N; only stiffness/
+# damping need boosting, or the gripper just sits there with ~zero effective
+# holding/actuating torque no matter what position is commanded.
+_GRIPPER_JOINT_NAMES = ("joint7", "joint8")
+_GRIPPER_DRIVE_STIFFNESS = 2000.0  # N/m
+_GRIPPER_DRIVE_DAMPING = 20.0  # N*s/m
+
 
 def find_arm(robot_prim_path: str, mount_name: str = "Piper"):
     """Looks for the Piper's own articulation root, scoped to *the parent*
@@ -58,11 +69,31 @@ def find_arm(robot_prim_path: str, mount_name: str = "Piper"):
     return None
 
 
+def _boost_gripper_drive_gains(arm_prim) -> None:
+    """Raises joint7/joint8's PhysicsDriveAPI stiffness/damping to
+    _GRIPPER_DRIVE_STIFFNESS/_GRIPPER_DRIVE_DAMPING (see module docstring
+    above). Scoped to arm_prim's parent (the Piper mount Xform) rather than
+    arm_prim's own subtree -- arm_prim is root_joint itself (see find_arm's
+    docstring: ArticulationRootAPI lands on the fixed weld joint in this USD,
+    not a body prim), whose own USD subtree contains no joints at all; the
+    actual joint1..joint8 prims live elsewhere under the mount, findable by
+    PhysX/Isaac's articulation APIs but not by a naive PrimRange from
+    arm_prim itself."""
+    mount_prim = arm_prim.GetParent()
+    for prim in Usd.PrimRange(mount_prim):
+        if prim.GetName() in _GRIPPER_JOINT_NAMES and prim.HasAPI(UsdPhysics.DriveAPI, "linear"):
+            drive = UsdPhysics.DriveAPI(prim, "linear")
+            drive.GetStiffnessAttr().Set(_GRIPPER_DRIVE_STIFFNESS)
+            drive.GetDampingAttr().Set(_GRIPPER_DRIVE_DAMPING)
+
+
 def publish_to_ros2(arm_prim) -> None:
     """Builds the OmniGraph publishing arm_prim's joint_states and driving
     it from joint_command (position/velocity/effort arrays, by joint name --
     what a FollowJointTrajectory-to-topic bridge on the ROS2/MoveIt side
     would publish)."""
+    _boost_gripper_drive_gains(arm_prim)
+
     stage = omni.usd.get_context().get_stage()
     if stage.GetPrimAtPath(GRAPH_PATH).IsValid():
         stage.RemovePrim(GRAPH_PATH)
@@ -110,3 +141,122 @@ def publish_to_ros2(arm_prim) -> None:
     if domain_id:
         og.Controller.attribute(f"{GRAPH_PATH}/Context.inputs:domain_id").set(int(domain_id))
         og.Controller.attribute(f"{GRAPH_PATH}/Context.inputs:useDomainIDEnvVar").set(False)
+
+
+# piper_ros's actual real-hardware driver (the "piper" package's
+# piper_ctrl_single_node.py -- confirmed by checking setup.py's console_scripts,
+# not the unused piper_ctrl_single_node_new.py) exposes a 7-element JointState
+# on both its state and command topics: name=['joint1'..'joint6','gripper'],
+# where the gripper is *one* combined value (real hardware has no joint7/
+# joint8 split) read by piper_ctrl_single_node.py's joint_callback() strictly
+# by *array index* (position[6], not by name) -- see
+# ~/devel/ros2/workspaces/piper_ros/src/piper/piper/piper_ctrl_single_node.py.
+_HW_ARM_JOINTS = ("joint1", "joint2", "joint3", "joint4", "joint5", "joint6")
+_HW_GRIPPER_DRIVE_JOINT = "joint7"
+_HW_GRIPPER_MIRROR_JOINT = "joint8"
+
+
+class HardwareCompatibleBridge:
+    """A *separate*, additive raw ROS2 interface from publish_to_ros2's own
+    piper/joint_states + piper/joint_command (8-joint, joint1..joint8 --
+    used by piper_isaacsim's topic_based_ros2_control for MoveIt): this one
+    mirrors piper_ctrl_single_node.py's own topics/shape exactly, so ROS2
+    code written against real Piper hardware (e.g. piper_ros's own
+    joy_to_piper_joint_states) runs against Isaac Sim unmodified. Nothing
+    stops both interfaces being wired up at once (real hardware users don't
+    run piper_single_ctrl and Gazebo/MoveIt against the same arm
+    simultaneously either) -- just don't send commands on both at once, or
+    whichever's ArticulationController write lands last each tick wins.
+
+    Uses a plain rclpy Node instead of OmniGraph -- this codebase's only one.
+    Neither ROS2PublishJointState nor ROS2SubscribeJointState can remap or
+    combine joint names (ROS2PublishJointState in particular has no data
+    inputs at all: it always derives name/position/velocity/effort straight
+    from targetPrim's own PhysX DOF names, so intercepting/rewriting its
+    output isn't possible either), so the gripper-combining logic below has
+    to happen in plain Python somewhere.
+
+    Domain ID: shares whichever *global default* rclpy context
+    isaacsim.ros2.bridge itself already initialized (plain ROS_DOMAIN_ID from
+    the environment) -- unlike this extension's OmniGraph pipelines (which
+    each get their own ROS2Context node), this does NOT honor an explicit
+    non-empty "ros2_domain_id" Preferences override. Fine for the common case
+    (that field left empty); revisit if a multi-domain Piper setup needs it.
+    """
+
+    def __init__(self, robot, states_topic: str, command_topic: str, namespace: str) -> None:
+        import rclpy
+        from sensor_msgs.msg import JointState
+
+        self._robot = robot
+        self._arm_indices = {j: robot.dof_names.index(j) for j in _HW_ARM_JOINTS}
+        self._gripper_drive_index = robot.dof_names.index(_HW_GRIPPER_DRIVE_JOINT)
+        self._gripper_mirror_index = robot.dof_names.index(_HW_GRIPPER_MIRROR_JOINT)
+        self._JointState = JointState
+        self._rclpy = rclpy
+
+        if not rclpy.ok():
+            rclpy.init()
+        self._node = rclpy.create_node("piper_hardware_compatible_bridge", namespace=namespace or None)
+        self._pub = self._node.create_publisher(JointState, states_topic, 1)
+        self._latest_command = None
+        self._node.create_subscription(JointState, command_topic, self._on_command, 1)
+
+    def _on_command(self, msg) -> None:
+        self._latest_command = msg
+
+    def step(self) -> None:
+        """Call once per physics tick: drains any pending joint_command
+        message (applying it to the articulation) and publishes fresh
+        joint_states_single feedback, both in piper_ctrl_single_node.py's own
+        7-element shape."""
+        from isaacsim.core.utils.types import ArticulationAction
+
+        self._rclpy.spin_once(self._node, timeout_sec=0.0)
+
+        cmd = self._latest_command
+        if cmd is not None:
+            self._latest_command = None
+            name_to_position = dict(zip(cmd.name, cmd.position))
+            positions, indices = [], []
+            for joint_name, index in self._arm_indices.items():
+                if joint_name in name_to_position:
+                    positions.append(name_to_position[joint_name])
+                    indices.append(index)
+            # Matches joint_callback()'s own gripper handling exactly: read by
+            # *array index* (position[6]), independent of what (if anything)
+            # cmd.name[6] says -- mirrored onto both gripper fingers since
+            # Isaac's PhysX joints aren't set up with a true mimic constraint
+            # (see _boost_gripper_drive_gains's docstring above).
+            if len(cmd.position) >= 7:
+                positions += [cmd.position[6], -cmd.position[6]]
+                indices += [self._gripper_drive_index, self._gripper_mirror_index]
+            if indices:
+                self._robot.apply_action(ArticulationAction(joint_positions=positions, joint_indices=indices))
+
+        read_indices = list(self._arm_indices.values()) + [self._gripper_drive_index]
+        current_positions = self._robot.get_joint_positions(joint_indices=read_indices)
+
+        msg = self._JointState()
+        msg.header.stamp = self._node.get_clock().now().to_msg()
+        msg.name = list(_HW_ARM_JOINTS) + ["gripper"]
+        msg.position = [float(p) for p in current_positions]
+        self._pub.publish(msg)
+
+    def shutdown(self) -> None:
+        self._node.destroy_node()
+
+
+def build_hardware_compatible_bridge(robot) -> HardwareCompatibleBridge:
+    """robot is go2_example.py's self.go2.robot (isaacsim.core.prims.
+    SingleArticulation) -- unlike find_arm/publish_to_ros2 above, this needs
+    a live, *initialized* articulation handle (robot.dof_names,
+    robot.apply_action) to read/drive joint positions directly in Python, not
+    just a USD prim path, so call this only after go2.initialize() (i.e. from
+    go2_example.py's on_physics_step first-tick branch, not setup_scene)."""
+    return HardwareCompatibleBridge(
+        robot,
+        settings.get("piper_hw_joint_states_topic"),
+        settings.get("piper_hw_joint_command_topic"),
+        settings.get("ros2_namespace"),
+    )
