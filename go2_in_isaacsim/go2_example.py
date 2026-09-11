@@ -126,7 +126,7 @@ class Go2Example(BaseSample):
             arm_prim = piper.find_arm(self.go2.robot.prim_path)
             self._piper_present = arm_prim is not None
             if arm_prim is not None:
-                piper.publish_to_ros2(arm_prim)
+                piper.publish_to_ros2(arm_prim, self.go2.robot.prim_path)
 
             # Piper's wrist-mounted D435 RealSense (see ROBOT_PRESETS /
             # go2_with_mid360_and_piper.usd): purely decorative mesh until

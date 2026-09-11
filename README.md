@@ -13,7 +13,9 @@ from `nav2` or any other ROS2 stack, an optional `go2_with_mid360.usd` Robot
 USD variant (published as PointCloud2 when ROS2 Bridge is on) for nav2's costmaps,
 and an optional `go2_with_mid360_and_piper.usd` variant that also mounts an
 [AgileX Piper](https://github.com/agilexrobotics/piper_isaac_sim) arm (joint_states
-out / joint_command in, for driving from MoveIt or any other ROS2 stack).
+out / joint_command in, for driving from MoveIt or any other ROS2 stack) with a
+wrist-mounted RealSense D435 (RGB/Depth/PointCloud2 out, e.g. for MoveIt's
+OctoMap-based obstacle avoidance).
 
 ## Install
 

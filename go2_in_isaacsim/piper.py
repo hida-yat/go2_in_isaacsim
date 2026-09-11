@@ -87,11 +87,30 @@ def _boost_gripper_drive_gains(arm_prim) -> None:
             drive.GetDampingAttr().Set(_GRIPPER_DRIVE_DAMPING)
 
 
-def publish_to_ros2(arm_prim) -> None:
+def publish_to_ros2(arm_prim, robot_prim_path: str) -> None:
     """Builds the OmniGraph publishing arm_prim's joint_states and driving
     it from joint_command (position/velocity/effort arrays, by joint name --
     what a FollowJointTrajectory-to-topic bridge on the ROS2/MoveIt side
-    would publish)."""
+    would publish), plus -- only if the "piper_publish_arm_tf" Preference is
+    True -- the arm's own link TF tree (link1..link6 etc.), relative to
+    robot_prim_path (Go2's base -- same reference prim ros2_bridge.py's own
+    chassis TF uses, so this joins the same tree at chassis_frame). Unlike
+    the Mid-360's *rigid* chassis->lidar mount (mid360.py's
+    _relative_transform, computed once), the arm actually moves, so this
+    has to be ROS2PublishTransformTree's live per-tick articulation walk,
+    not a one-shot static offset.
+
+    Leave that Preference off when a real Piper URDF's robot_state_publisher
+    is *also* running against this same arm (piper_isaacsim_bringup.
+    launch.py's MoveIt stack, via topic_based_ros2_control reading this
+    node's own joint_states topic) -- it publishes the identical
+    link1..link6 names from real joint_states, rooted at its own URDF's
+    "world"/"base_link", and having *this* publish the same names too (from
+    Isaac's own simulation-truth, rooted at Go2's unrelated "world") makes
+    tf2 flicker between the two on every lookup (see settings.py's
+    "piper_publish_arm_tf" comment). realsense.py's own camera TF edge is
+    parented at "link6" either way, so it keeps working off of whichever
+    one is actually publishing that tree."""
     _boost_gripper_drive_gains(arm_prim)
 
     stage = omni.usd.get_context().get_stage()
@@ -101,41 +120,56 @@ def publish_to_ros2(arm_prim) -> None:
     node_namespace = settings.get("ros2_namespace")
     domain_id = settings.get("ros2_domain_id")
     arm_prim_path = arm_prim.GetPath().pathString
+    publish_tf = settings.get("piper_publish_arm_tf") == "True"
 
     keys = og.Controller.Keys
+    create_nodes = [
+        ("OnPlaybackTick", "omni.graph.action.OnPlaybackTick"),
+        ("Context", "isaacsim.ros2.bridge.ROS2Context"),
+        ("ReadSimTime", "isaacsim.core.nodes.IsaacReadSimulationTime"),
+        ("PublishJointState", "isaacsim.ros2.bridge.ROS2PublishJointState"),
+        ("SubscribeJointState", "isaacsim.ros2.bridge.ROS2SubscribeJointState"),
+        ("ArticulationController", "isaacsim.core.nodes.IsaacArticulationController"),
+    ]
+    set_values = [
+        ("ReadSimTime.inputs:resetOnStop", False),
+        ("PublishJointState.inputs:targetPrim", arm_prim_path),
+        ("PublishJointState.inputs:topicName", settings.get("piper_joint_states_topic")),
+        ("PublishJointState.inputs:nodeNamespace", node_namespace),
+        ("SubscribeJointState.inputs:topicName", settings.get("piper_joint_command_topic")),
+        ("SubscribeJointState.inputs:nodeNamespace", node_namespace),
+        ("ArticulationController.inputs:targetPrim", arm_prim_path),
+    ]
+    connect = [
+        ("OnPlaybackTick.outputs:tick", "PublishJointState.inputs:execIn"),
+        ("OnPlaybackTick.outputs:tick", "SubscribeJointState.inputs:execIn"),
+        ("OnPlaybackTick.outputs:tick", "ArticulationController.inputs:execIn"),
+        ("Context.outputs:context", "PublishJointState.inputs:context"),
+        ("Context.outputs:context", "SubscribeJointState.inputs:context"),
+        ("ReadSimTime.outputs:simulationTime", "PublishJointState.inputs:timeStamp"),
+        ("SubscribeJointState.outputs:positionCommand", "ArticulationController.inputs:positionCommand"),
+        ("SubscribeJointState.outputs:velocityCommand", "ArticulationController.inputs:velocityCommand"),
+        ("SubscribeJointState.outputs:effortCommand", "ArticulationController.inputs:effortCommand"),
+        ("SubscribeJointState.outputs:jointNames", "ArticulationController.inputs:jointNames"),
+    ]
+
+    if publish_tf:
+        create_nodes.append(("PublishArmTF", "isaacsim.ros2.bridge.ROS2PublishTransformTree"))
+        set_values += [
+            ("PublishArmTF.inputs:parentPrim", robot_prim_path),
+            ("PublishArmTF.inputs:targetPrims", arm_prim_path),
+            ("PublishArmTF.inputs:topicName", settings.get("ros2_tf_topic")),
+            ("PublishArmTF.inputs:nodeNamespace", node_namespace),
+        ]
+        connect += [
+            ("OnPlaybackTick.outputs:tick", "PublishArmTF.inputs:execIn"),
+            ("Context.outputs:context", "PublishArmTF.inputs:context"),
+            ("ReadSimTime.outputs:simulationTime", "PublishArmTF.inputs:timeStamp"),
+        ]
+
     og.Controller.edit(
         {"graph_path": GRAPH_PATH, "evaluator_name": "execution"},
-        {
-            keys.CREATE_NODES: [
-                ("OnPlaybackTick", "omni.graph.action.OnPlaybackTick"),
-                ("Context", "isaacsim.ros2.bridge.ROS2Context"),
-                ("ReadSimTime", "isaacsim.core.nodes.IsaacReadSimulationTime"),
-                ("PublishJointState", "isaacsim.ros2.bridge.ROS2PublishJointState"),
-                ("SubscribeJointState", "isaacsim.ros2.bridge.ROS2SubscribeJointState"),
-                ("ArticulationController", "isaacsim.core.nodes.IsaacArticulationController"),
-            ],
-            keys.SET_VALUES: [
-                ("ReadSimTime.inputs:resetOnStop", False),
-                ("PublishJointState.inputs:targetPrim", arm_prim_path),
-                ("PublishJointState.inputs:topicName", settings.get("piper_joint_states_topic")),
-                ("PublishJointState.inputs:nodeNamespace", node_namespace),
-                ("SubscribeJointState.inputs:topicName", settings.get("piper_joint_command_topic")),
-                ("SubscribeJointState.inputs:nodeNamespace", node_namespace),
-                ("ArticulationController.inputs:targetPrim", arm_prim_path),
-            ],
-            keys.CONNECT: [
-                ("OnPlaybackTick.outputs:tick", "PublishJointState.inputs:execIn"),
-                ("OnPlaybackTick.outputs:tick", "SubscribeJointState.inputs:execIn"),
-                ("OnPlaybackTick.outputs:tick", "ArticulationController.inputs:execIn"),
-                ("Context.outputs:context", "PublishJointState.inputs:context"),
-                ("Context.outputs:context", "SubscribeJointState.inputs:context"),
-                ("ReadSimTime.outputs:simulationTime", "PublishJointState.inputs:timeStamp"),
-                ("SubscribeJointState.outputs:positionCommand", "ArticulationController.inputs:positionCommand"),
-                ("SubscribeJointState.outputs:velocityCommand", "ArticulationController.inputs:velocityCommand"),
-                ("SubscribeJointState.outputs:effortCommand", "ArticulationController.inputs:effortCommand"),
-                ("SubscribeJointState.outputs:jointNames", "ArticulationController.inputs:jointNames"),
-            ],
-        },
+        {keys.CREATE_NODES: create_nodes, keys.SET_VALUES: set_values, keys.CONNECT: connect},
     )
 
     if domain_id:

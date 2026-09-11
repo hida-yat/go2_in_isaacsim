@@ -65,6 +65,21 @@ DEFAULTS = {
     # the arm is a second, independent articulation, not part of the chassis's.
     "piper_joint_states_topic": "piper/joint_states",
     "piper_joint_command_topic": "piper/joint_command",
+    # Whether piper.py publishes the arm's own link1..link6 (+camera_link)
+    # TF tree. Leave True for a bare Isaac Sim + RViz session with no other
+    # ROS2 nodes running (nothing else would ever publish this tree
+    # otherwise). Turn OFF if a real Piper URDF-based robot_state_publisher
+    # is *also* running against the same arm (e.g. piper_isaacsim_bringup.
+    # launch.py's MoveIt stack, via topic_based_ros2_control) -- that one
+    # already publishes link1..link6 from real joint_states, rooted at its
+    # own URDF's "world"/"base_link"; leaving this on too means TWO
+    # publishers claim the same link names from two unrelated "world"
+    # roots (Isaac's own vs. the URDF's), which tf2 resolves by whichever
+    # arrives last -- symptom: a PointCloud2/OctoMap that flickers between
+    # correct and wildly-wrong placement every frame. realsense.py's own
+    # camera TF edge is parented at "link6" either way, so it keeps working
+    # once the real robot_state_publisher is the sole source.
+    "piper_publish_arm_tf": "True",
     # Separate, additive raw interface matching piper_ros's actual real-hardware
     # driver (piper_ctrl_single_node.py) exactly -- 7-element JointState with a
     # single combined "gripper" DOF instead of joint7/joint8 separately -- so
@@ -81,6 +96,9 @@ DEFAULTS = {
     "realsense_rgb_topic": "realsense/color/image_raw",
     "realsense_depth_topic": "realsense/depth/image_rect_raw",
     "realsense_camera_info_topic": "realsense/color/camera_info",
+    # realsense2_camera publishes this as depth/color/points (registered
+    # depth+color point cloud) when pointcloud.enable:=true.
+    "realsense_pointcloud_topic": "realsense/depth/color/points",
     "realsense_frame_id": "d435_color_optical_frame",
     "realsense_width": "640",
     "realsense_height": "480",
@@ -175,6 +193,16 @@ MID360_TEXT_FIELDS = [
 
 # Piper arm settings window. Whether one gets published at all depends on
 # whether the loaded Robot USD has one (see ROBOT_PRESETS above).
+PIPER_TOGGLE_FIELDS = [
+    (
+        "piper_publish_arm_tf",
+        "Publish Arm TF",
+        "Turn OFF if a real Piper URDF's robot_state_publisher is also running against this same arm "
+        "(e.g. piper_isaacsim_bringup.launch.py's MoveIt stack) -- otherwise two unrelated TF trees both "
+        "claim link1..link6, which tf2 resolves by last-writer-wins and flickers between them.",
+    ),
+]
+
 PIPER_TEXT_FIELDS = [
     ("piper_joint_states_topic", "Joint States Topic", "sensor_msgs/JointState telemetry for the arm, if the loaded Robot USD has one."),
     ("piper_joint_command_topic", "Joint Command Topic", "sensor_msgs/JointState (position/velocity/effort by joint name) that drives the arm -- e.g. from a FollowJointTrajectory-to-topic bridge on the MoveIt side."),
@@ -197,6 +225,7 @@ REALSENSE_TEXT_FIELDS = [
     ("realsense_rgb_topic", "RGB Topic", "sensor_msgs/Image (rgb8) from the D435's color stream."),
     ("realsense_depth_topic", "Depth Topic", "sensor_msgs/Image (32FC1, meters) from the D435's depth stream. Pixel-aligned with RGB (same simulated camera)."),
     ("realsense_camera_info_topic", "Camera Info Topic", "sensor_msgs/CameraInfo, shared by both RGB and Depth (same render product, so the same intrinsics apply to both)."),
+    ("realsense_pointcloud_topic", "Point Cloud Topic", "sensor_msgs/PointCloud2, colorized and reprojected from the same Depth stream (matches realsense2_camera's depth/color/points)."),
     ("realsense_frame_id", "Frame Id", "TF frame id for the camera optical frame, in image headers."),
     ("realsense_width", "Width (px)", "Rendered image width."),
     ("realsense_height", "Height (px)", "Rendered image height."),

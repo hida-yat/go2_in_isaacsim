@@ -272,29 +272,80 @@ hardware users don't run `piper_single_ctrl` and Gazebo/MoveIt against the
 same arm simultaneously either) -- just don't send commands on both at the
 same time, or whichever write lands last each tick wins.
 
+### Arm TF (`piper_publish_arm_tf`)
+
+If **ROS2 Bridge** is enabled and a Piper is loaded, `piper.py` also
+publishes the arm's own live link TF tree (`link1`..`link6`, `camera_link`,
+etc.), relative to the chassis -- this is what lets a bare Isaac Sim + RViz
+session (no other ROS2 nodes at all) show the arm/camera in the right place.
+
+**Turn this OFF** (**Publish Arm TF** checkbox, **Piper Arm** preferences,
+default **on**) if a real Piper URDF's `robot_state_publisher` is *also*
+running against this same arm -- e.g. a MoveIt stack driven via
+`topic_based_ros2_control` reading this extension's `piper/joint_states`
+(a companion `piper_isaacsim` ROS2 package does exactly this, outside this
+repo). That `robot_state_publisher` publishes the *same* `link1`..`link6`
+names from the *same* real joint data, but rooted at its own URDF's
+`world`/`base_link` -- an unrelated tree from this extension's own
+Go2-chassis-relative `world`. Leaving both on means two publishers claim
+the same frame names from two disconnected roots that just happen to share
+a name; tf2 resolves that by last-writer-wins, so anything downstream (e.g.
+a point cloud/OctoMap) flickers between "correctly placed" and "wildly
+wrong" every frame. `realsense.py`'s own camera TF edge is parented at
+`link6` either way (see below), so it keeps working correctly off of
+whichever one is actually the sole publisher.
+
 ## Piper RealSense (D435) (optional)
 
-The bundled Piper USD's wrist-mounted D435 mount
-(`Piper/link6/d435_camera_link`) is purely decorative mesh -- no `Camera`
-prim or optical-frame links at all. If **ROS2 Bridge** is enabled and the
-loaded Robot USD has that mount, `realsense.py` creates the actual `Camera`
-prim (once, reused across re-Loads) and publishes:
+The bundled Piper USD's wrist-mounted D435 mount is `Piper/camera_link` -- a
+real PhysX rigid body, wired to `link6` by a fixed joint
+(`camera_link_joint`), matching the link name a real Piper+D435 URDF (and
+this repo's companion MoveIt config) also uses. (There's also a *second*,
+similarly-named `Piper/link6/d435_camera_link` -- a plain decorative Xform
+with no physics, a couple cm off from `camera_link`, seemingly a leftover
+from the asset's import; `realsense.py` uses `camera_link`, not that one.)
+Neither carries a `Camera` prim or optical-frame links on its own. If **ROS2
+Bridge** is enabled and the loaded Robot USD has that mount, `realsense.py`
+creates the actual `Camera` prim (once, reused across re-Loads) and
+publishes:
 
 - **RGB Topic** (default `realsense/color/image_raw`, `rgb8`)
 - **Depth Topic** (default `realsense/depth/image_rect_raw`, `32FC1`, meters)
+- **Point Cloud Topic** (default `realsense/depth/color/points`,
+  `sensor_msgs/PointCloud2`) -- `ROS2CameraHelper`'s `depth_pcl` type,
+  reprojected from the same Depth stream.
 - **Camera Info Topic** (default `realsense/color/camera_info`) -- shared by
-  both streams since they come from the same render product (one simulated
+  all three since they come from the same render product (one simulated
   camera), so they're inherently pixel-aligned already.
 
 Configurable (topic names, frame id, resolution) in **Piper RealSense
-(D435)** preferences. The camera's orientation relative to the mesh mount
+(D435)** preferences. FOV (`_HORIZONTAL_APERTURE_MM`/`_FOCAL_LENGTH_MM`) and
+clipping range (`_CLIPPING_RANGE`) are tuned to Intel's own published D435
+specs -- Depth FOV 85.2 x 58 (+/-3deg, wider than RGB's 69.4 x 42.5, but RGB
+and Depth share one render product here so only one FOV is achievable; this
+picks Depth's since that's what drives the point cloud) and the "Operating
+Range (Min-Max): ~0.3m - 3m" spec field (not the theoretical 10m+ Max
+Range -- Isaac's simulated depth has no real-world falloff/noise, so
+clipping to the theoretical max made the point cloud read as unrealistically
+far-reaching). The camera's orientation relative to the mount
 (`realsense.py`'s `_CAMERA_ORIENT`) was tuned by trial and error against the
 actual viewport output (not derived from a documented spec) -- if you swap in
 a different Piper USD variant with a different camera mesh, re-check it.
-No TF is published for the camera frame (or for any Piper arm link) by this
-extension -- if you need `d435_color_optical_frame` connected to the rest of
-the TF tree, that's a `robot_state_publisher` fed from `piper/joint_states`
-in your own ROS2 workspace, same boundary as the MoveIt bridge note above.
+
+A fixed TF edge (`link6` -> `realsense_frame_id`, default
+`d435_color_optical_frame`) is published every tick, folding in both
+`camera_link`'s own mount offset and a 180deg-about-local-X correction
+(`_ROS_OPTICAL_FIX`) -- `depth_pcl`'s points come out in REP-103
+optical-frame convention (+Z forward, +X right, +Y down) regardless of the
+Camera prim's own Hydra/USD axes (-Z forward, +Y up), so that correction has
+to be folded into the TF or the point cloud renders correctly-shaped but
+180deg off (forward/back and up/down both flipped) from everything else in
+the tree. Parented at `link6` rather than `camera_link` specifically so this
+edge attaches correctly whether `link6` itself is being published by this
+extension's own **Publish Arm TF** (see above) or by an external
+`robot_state_publisher` -- either way it's one fixed offset (`camera_link`
+doesn't move relative to `link6`), computed once from the loaded USD's
+actual geometry, not a guessed number.
 
 ## Notes for redistribution
 

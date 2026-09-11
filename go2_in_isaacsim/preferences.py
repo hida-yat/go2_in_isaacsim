@@ -76,6 +76,8 @@ class Go2PolicyPreferences(PreferenceBuilder):
                         word_wrap=True,
                         height=0,
                     )
+                    for key, label, tooltip in settings.PIPER_TOGGLE_FIELDS:
+                        self._build_bool_row(key, label, tooltip)
                     for key, label, tooltip in settings.PIPER_TEXT_FIELDS:
                         self._build_text_row(key, label, tooltip)
             with self.add_frame("Piper RealSense (D435)"):
