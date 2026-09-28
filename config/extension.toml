@@ -1,10 +1,10 @@
 display_name = "Go2 Policy Example (unitree_rl_lab)"
 
 [package]
-version = "0.5.0"
+version = "0.6.0"
 category = "Simulation"
 title = "Unitree Go2 RL Policy Example"
-description = "Runs a unitree_rl_lab-trained Go2 locomotion policy in pure Isaac Sim, in the style of the built-in Spot Quadruped example. Robot/environment USD and policy checkpoint are configurable from Edit > Preferences > Go2 Policy Example. Optional ROS2 bridge: drive from cmd_vel, publish odom/tf/joint_states/clock for nav2. Optional Mid-360 lidar and physics IMU, published as PointCloud2 and Imu."
+description = "Runs a unitree_rl_lab-trained Go2 locomotion policy in pure Isaac Sim, in the style of the built-in Spot Quadruped example. Robot/environment USD and policy checkpoint are configurable from Edit > Preferences > Go2 Policy Example. Optional ROS2 bridge: drive from cmd_vel, publish odom/tf/joint_states/clock for nav2. Optional Mid-360 lidar and physics IMU, published as PointCloud2 and Imu. Also includes an arm-only Piper + RealSense grasp-practice example (no Go2) with randomly placed lemons."
 repository = ""
 keywords = ["isaac", "robot", "quadruped", "go2", "unitree", "policy"]
 readme = "docs/README.md"

@@ -71,7 +71,15 @@ _FOCAL_LENGTH_MM = 11.4
 # hardware limit made the point cloud read as unrealistically far-reaching
 # (e.g. cleanly picking up walls several meters out) compared to a real
 # D435 in the same room.
-_CLIPPING_RANGE = (0.3, 3.0)
+#
+# The *near* end is NOT that 0.3m, though: it's the Camera prim's near
+# clipping plane, and RGB shares this one camera, so anything closer got
+# sliced open -- a lemon under the wrist showed as a hollow shell, and the
+# floor below a downward-looking wrist camera (~0.23m away) rendered pure
+# black (nothing behind it: no sky). A real D435's color sensor has no such
+# cutoff. 0.1m is the product brief's Min-Z (0.105m at 848x480), the
+# closest the real depth stream returns anything at all.
+_CLIPPING_RANGE = (0.1, 3.0)
 
 # ROS2CameraHelper's "depth_pcl" unprojects pixels with no pose input at all
 # (isaacsim.core.nodes.IsaacConvertDepthToPointCloud takes only focal
@@ -90,6 +98,20 @@ _CLIPPING_RANGE = (0.3, 3.0)
 # around the camera's local X (forward/back and up/down both flipped).
 _ROS_OPTICAL_FIX = Gf.Quatd(0.0, 1.0, 0.0, 0.0)  # 180deg about local X, (w, i, j, k)
 
+# The bundled Piper USD's link frames match the real Piper URDF's
+# (piper_description.urdf) link *positions* exactly, but not their
+# *orientations* -- the USD's link6 frame is the URDF's link6 frame rotated
+# +90deg about their shared local Z (the wrist axis). Measured headlessly by
+# comparing Isaac's actual link6 world pose against the URDF's forward
+# kinematics at the same joint positions (90.00deg at every configuration
+# tried). The link6 -> optical-frame edge below is computed in the USD's
+# link6 frame; when link6 is instead published by a real-URDF
+# robot_state_publisher (piper_publish_arm_tf OFF -- the MoveIt setup), the
+# edge has to be re-expressed in the URDF's link6 frame, or the whole point
+# cloud lands rolled 90deg around the wrist (a floor shows up as a wall).
+# This is the USD link6 frame's rotation expressed in the URDF link6 frame.
+_URDF_LINK6_FROM_USD_LINK6 = Gf.Rotation(Gf.Vec3d(0.0, 0.0, 1.0), 90.0)
+
 
 def find_sensor(robot_prim_path: str, mount_name: str = "Piper"):
     """Looks for the D435 mount link (camera_link, a real PhysX rigid body
@@ -106,7 +128,15 @@ def find_sensor(robot_prim_path: str, mount_name: str = "Piper"):
     parent_prim = robot_prim.GetParent()
     if not parent_prim.IsValid():
         return None
-    mount_prim = stage.GetPrimAtPath(parent_prim.GetPath().AppendChild(mount_name))
+    return find_sensor_in_mount(parent_prim.GetPath().AppendChild(mount_name).pathString)
+
+
+def find_sensor_in_mount(mount_prim_path: str):
+    """camera_link under mount_prim_path -- the prim piper.usd was
+    referenced onto (see piper.find_arm_in_mount). Returns None if there's
+    no such prim or no camera link under it."""
+    stage = omni.usd.get_context().get_stage()
+    mount_prim = stage.GetPrimAtPath(mount_prim_path)
     if not mount_prim.IsValid():
         return None
     for prim in Usd.PrimRange(mount_prim):
@@ -132,6 +162,17 @@ def _relative_transform(prim, reference_prim, local_rotation_fix=None):
     imaginary = quat.GetImaginary()
     # ROS2PublishRawTransformTree expects (x, y, z, w), not Gf's (w, x, y, z).
     return translation, (imaginary[0], imaginary[1], imaginary[2], quat.GetReal())
+
+
+def _to_urdf_link6(translation, orientation):
+    """Re-expresses a USD-link6-relative pose (translation, (x, y, z, w)) in
+    the real Piper URDF's link6 frame -- see _URDF_LINK6_FROM_USD_LINK6."""
+    fix = _URDF_LINK6_FROM_USD_LINK6
+    x, y, z, w = orientation
+    # Plain Hamilton product: fix applied after orientation.
+    quat = (fix.GetQuat() * Gf.Quatd(w, x, y, z)).GetNormalized()
+    imaginary = quat.GetImaginary()
+    return fix.TransformDir(Gf.Vec3d(translation)), (imaginary[0], imaginary[1], imaginary[2], quat.GetReal())
 
 
 def _find_or_create_camera(mount_link_prim):
@@ -180,6 +221,8 @@ def publish_to_ros2(mount_link_prim) -> None:
     # cloud) is in the optical-frame axes _ROS_OPTICAL_FIX defines, not the
     # Camera prim's own raw Hydra axes -- see that constant's comment.
     translation, orientation = _relative_transform(camera_prim, wrist_link_prim, _ROS_OPTICAL_FIX)
+    if settings.get("piper_publish_arm_tf") != "True":
+        translation, orientation = _to_urdf_link6(translation, orientation)
 
     stage = omni.usd.get_context().get_stage()
     if stage.GetPrimAtPath(GRAPH_PATH).IsValid():

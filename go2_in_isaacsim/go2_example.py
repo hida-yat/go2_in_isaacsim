@@ -7,7 +7,7 @@ import omni
 import omni.appwindow  # Contains handle to keyboard
 from isaacsim.examples.interactive.base_sample import BaseSample
 
-from . import imu, mid360, piper, realsense, ros2_bridge, settings
+from . import environment, imu, mid360, piper, realsense, ros2_bridge, settings
 from .go2 import Go2FlatTerrainPolicy
 
 
@@ -51,37 +51,7 @@ class Go2Example(BaseSample):
         }
 
     def setup_scene(self) -> None:
-        environment_usd_path = settings.get("environment_usd_path")
-        if environment_usd_path:
-            from isaacsim.core.utils.stage import add_reference_to_stage
-
-            # Preset paths (see settings.ENVIRONMENT_PRESETS) are Nucleus-relative
-            # ("/Isaac/Environments/...") -- resolve against the assets root.
-            # A manually typed/browsed path is already a full local/Nucleus path.
-            if environment_usd_path.startswith("/Isaac/"):
-                from isaacsim.storage.native import get_assets_root_path
-
-                assets_root_path = get_assets_root_path()
-                if assets_root_path is None:
-                    carb.log_error(
-                        "Go2 Policy Example: could not resolve Isaac Sim's assets root to load the "
-                        f"environment preset '{environment_usd_path}'. Falling back to the default ground plane."
-                    )
-                    environment_usd_path = None
-                else:
-                    environment_usd_path = assets_root_path + environment_usd_path
-
-        if environment_usd_path:
-            add_reference_to_stage(environment_usd_path, "/World/Environment")
-        else:
-            self._world.scene.add_default_ground_plane(
-                z_position=0,
-                name="default_ground_plane",
-                prim_path="/World/defaultGroundPlane",
-                static_friction=0.2,
-                dynamic_friction=0.2,
-                restitution=0.01,
-            )
+        environment.load(self._world, "Go2 Policy Example")
         self.go2 = Go2FlatTerrainPolicy(
             prim_path="/World/Go2",
             name="Go2",

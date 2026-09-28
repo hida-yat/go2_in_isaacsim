@@ -11,6 +11,8 @@
 # isaacsim.ros2.bridge's own "Extensions > ROS2 > Joint States" graph
 # shortcut uses (og_shortcuts/og_utils.py's Ros2JointStatesGraph).
 
+from typing import Optional
+
 import omni.graph.core as og
 import omni.usd
 from pxr import Usd, UsdPhysics
@@ -60,7 +62,17 @@ def find_arm(robot_prim_path: str, mount_name: str = "Piper"):
     parent_prim = robot_prim.GetParent()
     if not parent_prim.IsValid():
         return None
-    mount_prim = stage.GetPrimAtPath(parent_prim.GetPath().AppendChild(mount_name))
+    return find_arm_in_mount(parent_prim.GetPath().AppendChild(mount_name).pathString)
+
+
+def find_arm_in_mount(mount_prim_path: str):
+    """The Piper's articulation root (root_joint) under mount_prim_path --
+    the prim piper.usd was referenced onto. Used directly by
+    piper_example.py's arm-only mode, where the mount is a plain /World
+    child rather than a sibling of Go2's base (see find_arm). Returns None
+    if there's no such prim or no articulation root under it."""
+    stage = omni.usd.get_context().get_stage()
+    mount_prim = stage.GetPrimAtPath(mount_prim_path)
     if not mount_prim.IsValid():
         return None
     for prim in Usd.PrimRange(mount_prim):
@@ -87,7 +99,7 @@ def _boost_gripper_drive_gains(arm_prim) -> None:
             drive.GetDampingAttr().Set(_GRIPPER_DRIVE_DAMPING)
 
 
-def publish_to_ros2(arm_prim, robot_prim_path: str) -> None:
+def publish_to_ros2(arm_prim, robot_prim_path: Optional[str]) -> None:
     """Builds the OmniGraph publishing arm_prim's joint_states and driving
     it from joint_command (position/velocity/effort arrays, by joint name --
     what a FollowJointTrajectory-to-topic bridge on the ROS2/MoveIt side
@@ -110,7 +122,11 @@ def publish_to_ros2(arm_prim, robot_prim_path: str) -> None:
     tf2 flicker between the two on every lookup (see settings.py's
     "piper_publish_arm_tf" comment). realsense.py's own camera TF edge is
     parented at "link6" either way, so it keeps working off of whichever
-    one is actually publishing that tree."""
+    one is actually publishing that tree.
+
+    robot_prim_path=None (piper_example.py's arm-only mode, no chassis)
+    leaves the TF tree's parentPrim unset, so it's rooted at "world"
+    instead: world -> arm_base -> link1..link6."""
     _boost_gripper_drive_gains(arm_prim)
 
     stage = omni.usd.get_context().get_stage()
@@ -155,8 +171,9 @@ def publish_to_ros2(arm_prim, robot_prim_path: str) -> None:
 
     if publish_tf:
         create_nodes.append(("PublishArmTF", "isaacsim.ros2.bridge.ROS2PublishTransformTree"))
+        if robot_prim_path:
+            set_values.append(("PublishArmTF.inputs:parentPrim", robot_prim_path))
         set_values += [
-            ("PublishArmTF.inputs:parentPrim", robot_prim_path),
             ("PublishArmTF.inputs:targetPrims", arm_prim_path),
             ("PublishArmTF.inputs:topicName", settings.get("ros2_tf_topic")),
             ("PublishArmTF.inputs:nodeNamespace", node_namespace),
@@ -282,8 +299,9 @@ class HardwareCompatibleBridge:
 
 
 def build_hardware_compatible_bridge(robot) -> HardwareCompatibleBridge:
-    """robot is go2_example.py's self.go2.robot (isaacsim.core.prims.
-    SingleArticulation) -- unlike find_arm/publish_to_ros2 above, this needs
+    """robot is go2_example.py's self.go2.robot, or piper_example.py's
+    arm-only self._arm (both isaacsim.core.prims.SingleArticulation, both
+    containing joint1..joint8 among their dof_names) -- unlike find_arm/publish_to_ros2 above, this needs
     a live, *initialized* articulation handle (robot.dof_names,
     robot.apply_action) to read/drive joint positions directly in Python, not
     just a USD prim path, so call this only after go2.initialize() (i.e. from

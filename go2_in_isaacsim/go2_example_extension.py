@@ -4,14 +4,24 @@
 import asyncio
 import os
 
+import carb.settings
 import omni.ext
+import omni.kit.app
 import omni.ui as ui
 from isaacsim.examples.browser import get_instance as get_browser_instance
 from isaacsim.examples.interactive.base_sample import BaseSampleUITemplate
-from omni.kit.window.preferences import register_page, unregister_page
+from omni.kit.window.preferences import register_page, select_page, show_preferences_window, unregister_page
 
 from .go2_example import Go2Example
+from .piper_example import PiperExample
 from .preferences import Go2PolicyPreferences
+
+# Launch-time only (not persistent): pass
+# --/exts/go2_in_isaacsim/open_preferences_on_startup=true on the Isaac Sim
+# command line (e.g. from the isaac_go2_run alias) to open Edit > Preferences
+# on this extension's page at startup. The Robotics Examples browser has its
+# own equivalent, --/exts/isaacsim.examples.browser/visible_after_startup=true.
+SETTING_OPEN_PREFERENCES_ON_STARTUP = "/exts/go2_in_isaacsim/open_preferences_on_startup"
 
 
 class Go2ExampleUITemplate(BaseSampleUITemplate):
@@ -39,12 +49,31 @@ class Go2ExampleUITemplate(BaseSampleUITemplate):
         asyncio.ensure_future(self._sample.clear_async())
 
 
+class PiperExampleUITemplate(Go2ExampleUITemplate):
+    """Go2ExampleUITemplate's Clear World, plus a Randomize Lemons button
+    that re-scatters the lemons without resetting the arm."""
+
+    def build_extra_frames(self):
+        super().build_extra_frames()
+        with self.get_extra_frames_handle():
+            with ui.CollapsableFrame(title="Grasp Practice", width=ui.Fraction(1), height=0, collapsed=False):
+                with ui.VStack(spacing=5, height=0):
+                    ui.Button(
+                        "Randomize Lemons",
+                        clicked_fn=self._sample.randomize_lemons,
+                        tooltip="Scatter the lemons to new random poses in front of the arm, leaving the arm as-is."
+                        " (Reset also does this, and returns the arm to its initial pose.)",
+                    )
+
+
 class Go2ExampleExtension(omni.ext.IExt):
     def on_startup(self, ext_id: str):
         self.example_name = "Go2"
         self.category = "Policy"
 
         self._preferences_page = register_page(Go2PolicyPreferences())
+        if carb.settings.get_settings().get_as_bool(SETTING_OPEN_PREFERENCES_ON_STARTUP):
+            asyncio.ensure_future(self._open_preferences_async())
 
         overview = "This example runs a Unitree Go2 flat terrain velocity policy"
         overview += " trained with unitree_rl_lab (Isaac Lab), deployed directly in Isaac Sim."
@@ -91,10 +120,53 @@ class Go2ExampleExtension(omni.ext.IExt):
             category=self.category,
         )
 
+        self._register_piper_example(ext_id)
         return
+
+    async def _open_preferences_async(self):
+        # The Preferences window itself is only created once its extension
+        # finishes starting up, which can be after this one -- wait a few
+        # frames before showing it and selecting this extension's page.
+        for _ in range(10):
+            await omni.kit.app.get_app().next_update_async()
+        show_preferences_window()
+        await omni.kit.app.get_app().next_update_async()
+        if self._preferences_page:
+            select_page(self._preferences_page)
+
+    def _register_piper_example(self, ext_id: str):
+        self.piper_example_name = "Piper Grasp Practice"
+        self.piper_category = "Manipulation"
+
+        overview = "Arm-only mode: the Piper arm and its wrist D435 RealSense, fixed to the world at the"
+        overview += " origin -- no Go2, no locomotion policy. Lemons (physics rigid bodies) are scattered"
+        overview += " at random in front of the arm as grasp targets; Reset (or 'Randomize Lemons' below)"
+        overview += " scatters a new layout."
+        overview += "\n\nWith Edit > Preferences > Go2 Policy Example > ROS2 Bridge enabled, publishes/subscribes"
+        overview += " the same Piper joint_states/joint_command (and hardware-compatible) topics and the same D435"
+        overview += " RGB/Depth/PointCloud2/CameraInfo topics as 'Go2 with Mid-360 + Piper', plus /clock."
+        overview += " The TF tree is rooted at world -> arm_base (no chassis)."
+        overview += "\n\nThe floor is always the plain ground plane (Environment USD applies only to the Go2"
+        overview += " example). Lemon count is set in Preferences; use 'Clear World' before Load to pick up changes."
+
+        ui_handle = PiperExampleUITemplate(
+            ext_id=ext_id,
+            file_path=os.path.abspath(__file__),
+            title="Manipulation: Piper Grasp Practice",
+            doc_link="",
+            overview=overview,
+            sample=PiperExample(),
+        )
+        get_browser_instance().register_example(
+            name=self.piper_example_name,
+            execute_entrypoint=ui_handle.build_window,
+            ui_hook=ui_handle.build_ui,
+            category=self.piper_category,
+        )
 
     def on_shutdown(self):
         get_browser_instance().deregister_example(name=self.example_name, category=self.category)
+        get_browser_instance().deregister_example(name=self.piper_example_name, category=self.piper_category)
 
         if self._preferences_page:
             unregister_page(self._preferences_page)

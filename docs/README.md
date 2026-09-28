@@ -26,8 +26,17 @@ to point this extension at your own assets:
 - **Environment USD** — optional world/environment USD. Leave empty for the default
   flat ground plane. The **Preset** dropdown right below it quick-fills this field
   with one of Isaac Sim's own bundled sample environments (Grid, Simple Room,
-  Warehouse, ...), resolved against your Isaac Sim assets root at Load time; pick
-  **Custom...** to type/browse your own path instead.
+  Warehouse, ...), resolved against your Isaac Sim assets root at Load time, or the
+  bundled **Lemon Tree (plain ground)** (`data/Environments/LemonTree/
+  lemon_tree_world.usd` — a flat physics ground plane plus a "Mini Lemon Tree" prop
+  (rotated upright, offset off of Go2's own spawn point, and hand-recolored per
+  part -- the source model's real textures aren't available, just its material
+  names), built by `tools/build_lemon_tree_world.py` from a downloaded FBX with no
+  accompanying scale reference, so it's normalized to a fixed 0.4m height rather
+  than trusting the file's raw units; re-run that script with
+  `LEMON_TREE_SOURCE_OBJ=/path/to/other.fbx` to swap in a different prop the same
+  way — see the script's own comments); pick **Custom...** to type/browse your own
+  path instead.
 - **Policy (.pt)** / **Policy env.yaml** — the TorchScript checkpoint and its matching
   Isaac Lab `params/env.yaml` (joint gains, default pose, action/observation scales).
   A default checkpoint ships in `data/Policies/Go2/`.
@@ -90,9 +99,18 @@ isaac_run() {
   "$HOME/isaacsim/isaac-sim.sh" "$@"
 }
 
-# Launches Isaac Sim with this extension enabled, via the clean launcher above.
-alias isaac_go2_run='isaac_run --enable go2_in_isaacsim'
+# Launches Isaac Sim with this extension enabled, via the clean launcher above,
+# with the Robotics Examples browser and this extension's Preferences page
+# already open.
+alias isaac_go2_run='isaac_run --enable go2_in_isaacsim \
+  --/exts/isaacsim.examples.browser/visible_after_startup=true \
+  --/exts/go2_in_isaacsim/open_preferences_on_startup=true'
 ```
+
+The last two flags are optional. `visible_after_startup` is the examples
+browser's own setting. `open_preferences_on_startup` is this extension's: it
+opens **Edit > Preferences** on the **Go2 Policy Example** page. Neither is
+persisted, so launching without them behaves as before.
 
 (Adjust `$HOME/isaacsim` to your actual Isaac Sim install path.) After `source
 ~/.bashrc`, `isaac_go2_run` opens Isaac Sim with `go2_in_isaacsim` enabled and a
@@ -323,11 +341,14 @@ Configurable (topic names, frame id, resolution) in **Piper RealSense
 clipping range (`_CLIPPING_RANGE`) are tuned to Intel's own published D435
 specs -- Depth FOV 85.2 x 58 (+/-3deg, wider than RGB's 69.4 x 42.5, but RGB
 and Depth share one render product here so only one FOV is achievable; this
-picks Depth's since that's what drives the point cloud) and the "Operating
-Range (Min-Max): ~0.3m - 3m" spec field (not the theoretical 10m+ Max
-Range -- Isaac's simulated depth has no real-world falloff/noise, so
-clipping to the theoretical max made the point cloud read as unrealistically
-far-reaching). The camera's orientation relative to the mount
+picks Depth's since that's what drives the point cloud). The far clip is
+3m, from the "Operating Range (Min-Max): ~0.3m - 3m" spec field rather than
+the theoretical 10m+ Max Range: Isaac's simulated depth has no real-world
+falloff/noise, so clipping to the theoretical max made the point cloud read
+as unrealistically far-reaching. The near clip is 0.1m, the spec's Min-Z,
+*not* that 0.3m. RGB shares this camera, so a 0.3m near plane sliced open
+anything close to the wrist: lemons looked hollow, and the floor under a
+downward-looking wrist rendered black. The camera's orientation relative to the mount
 (`realsense.py`'s `_CAMERA_ORIENT`) was tuned by trial and error against the
 actual viewport output (not derived from a documented spec) -- if you swap in
 a different Piper USD variant with a different camera mesh, re-check it.
@@ -346,6 +367,74 @@ extension's own **Publish Arm TF** (see above) or by an external
 `robot_state_publisher` -- either way it's one fixed offset (`camera_link`
 doesn't move relative to `link6`), computed once from the loaded USD's
 actual geometry, not a guessed number.
+
+The bundled Piper USD's link frames match the real Piper URDF's
+(`piper_description.urdf`) link *positions* but not their *orientations*.
+The USD's `link6` is the URDF's `link6` rotated +90deg about the wrist
+(local Z). This was measured headlessly by comparing Isaac's link6 pose
+against the URDF's forward kinematics at the same joint positions. So this
+edge is computed in whichever `link6` frame is actually being published:
+
+- **Publish Arm TF** on: the USD's own frame.
+- **Publish Arm TF** off (a real-URDF `robot_state_publisher`, e.g. the MoveIt
+  stack): the URDF's frame.
+
+Before this was handled, the MoveIt OctoMap showed the whole point cloud
+rolled 90deg around the wrist (the floor stood up as a wall). The same
+mismatch also means Isaac's own arm TF (link1..link6) isn't interchangeable
+with the URDF's. That's one more reason never to run both at once.
+
+## Piper Grasp Practice (arm-only mode)
+
+A second example in the same browser, **Isaac Examples > Manipulation > Piper
+Grasp Practice**: the Piper arm and its wrist D435 on their own, with no Go2,
+no locomotion policy, and nothing that moves the base. It loads the bare
+`data/Robots/Piper/usd/piper.usd` at `/World/Piper`. That file's `root_joint`
+already welds `arm_base` to the world, so it is a fixed-base arm at the
+origin. (`tools/build_go2_with_mid360_and_piper.py` is what redirects that
+joint onto Go2's `base` for the Go2 variant.)
+
+It's meant as a grasp-practice area. **Lemon Count** (Preferences > **Piper
+Grasp Practice**, default 3) physics lemons are scattered in front of the arm
+(`lemons.py`): 0.25-0.45m out, within ±50deg of +X, at least 0.1m apart,
+lying on their side with a random heading. Each is a ~75 x 55mm ellipsoid
+(0.1kg, convex-hull collision, friction 1.0), sized to fit the gripper's
+~70mm opening. The tree prop's own lemons can't be used for this because
+they're fused into its mesh. **Reset** returns the arm to its initial pose
+and scatters a fresh layout. **Randomize Lemons**, in the example panel,
+re-scatters them without touching the arm.
+
+The floor is always the plain ground plane: **Environment USD** is ignored
+here (it only adds clutter to the D435's view and OctoMap) and still applies
+to the Go2 example. The **ROS2 Bridge**, **Piper Arm**, and **Piper
+RealSense (D435)** Preferences do apply. With ROS2 enabled it
+publishes and subscribes the same topics as **Go2 with Mid-360 + Piper**: the
+8-joint `piper/joint_states`/`piper/joint_command`, the hardware-compatible
+`joint_states_single`/`joint_command`, and the D435 RGB/Depth/PointCloud2/
+CameraInfo. It also publishes `/clock` if **Publish /clock** is on. There is
+no chassis, so there's no `cmd_vel`/`odom`, and the arm TF tree is rooted at
+`world -> arm_base -> link1..link6` instead of under the chassis frame. The
+D435's `link6 -> d435_color_optical_frame` edge is unchanged.
+
+Headless check (from this extension's root): `isaac_run
+tools/test_piper_practice.py`. It covers the fixed base, lemon placement and
+settling, Randomize/Reset, every ROS2 topic above, and `joint_command`
+actually driving the arm.
+
+## Lighting
+
+The default ground plane brings its own light, a single overhead sphere
+light. With no ambient fill, every shadow under it is pure black, including
+the arm's own shadow on the floor and the underside of each lemon in the
+D435 image. So `environment.load_ground_plane` also adds a dome light for
+fill. The bundled Lemon Tree world (and many custom environments) carries
+no light at all. If the loaded stage has
+no light at all, `environment.py` adds a dome light and a tilted distant
+light. Without them the viewport's **Stage
+Lights** mode renders black, and so does the D435's RGB stream. The
+viewport's **Camera Light** mode only lights the viewport, not sensor
+cameras. Environments that bring their own lights (e.g. the Nucleus
+Warehouse/Simple Room presets) are left as-is.
 
 ## Notes for redistribution
 

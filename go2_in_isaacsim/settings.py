@@ -102,6 +102,9 @@ DEFAULTS = {
     "realsense_frame_id": "d435_color_optical_frame",
     "realsense_width": "640",
     "realsense_height": "480",
+    # Piper Grasp Practice (arm-only mode, piper_example.py): how many
+    # physics lemons lemons.py scatters in front of the arm on every Reset.
+    "lemon_count": "3",
 }
 
 # Order + display metadata for the settings window.
@@ -145,6 +148,14 @@ ENVIRONMENT_PRESETS = [
     ("Warehouse", "/Isaac/Environments/Simple_Warehouse/warehouse.usd"),
     ("Warehouse (Full)", "/Isaac/Environments/Simple_Warehouse/full_warehouse.usd"),
     ("Warehouse with Forklifts", "/Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd"),
+    # A bundled local file (like ROBOT_PRESETS below), not a Nucleus path --
+    # doesn't start with "/Isaac/", so go2_example.py's own environment_usd_path
+    # branch (see setup_scene) loads it as-is via add_reference_to_stage
+    # instead of resolving it against the Nucleus assets root.
+    (
+        "Lemon Tree (plain ground)",
+        os.path.join(_EXT_ROOT, "data", "Environments", "LemonTree", "lemon_tree_world.usd"),
+    ),
     ("Custom...", None),
 ]
 
@@ -229,6 +240,11 @@ REALSENSE_TEXT_FIELDS = [
     ("realsense_frame_id", "Frame Id", "TF frame id for the camera optical frame, in image headers."),
     ("realsense_width", "Width (px)", "Rendered image width."),
     ("realsense_height", "Height (px)", "Rendered image height."),
+]
+
+# Piper Grasp Practice (arm-only mode) settings window -- see piper_example.py.
+PIPER_PRACTICE_TEXT_FIELDS = [
+    ("lemon_count", "Lemon Count", "How many lemons to scatter in front of the arm (re-scattered on every Reset / Randomize Lemons)."),
 ]
 
 

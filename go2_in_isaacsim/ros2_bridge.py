@@ -131,6 +131,43 @@ def build_graph(robot_prim_path: str) -> str:
     return f"{GRAPH_PATH}/{SUBSCRIBE_TWIST_NODE}"
 
 
+def build_clock_graph(graph_path: str) -> None:
+    """Just the /clock publisher from build_graph above, on its own -- for
+    piper_example.py's arm-only mode, which has no chassis (so no cmd_vel/
+    odom/chassis TF) but still needs /clock for use_sim_time consumers
+    (MoveIt, etc.)."""
+    stage = omni.usd.get_context().get_stage()
+    if stage.GetPrimAtPath(graph_path).IsValid():
+        stage.RemovePrim(graph_path)
+
+    keys = og.Controller.Keys
+    og.Controller.edit(
+        {"graph_path": graph_path, "evaluator_name": "execution"},
+        {
+            keys.CREATE_NODES: [
+                ("OnPlaybackTick", "omni.graph.action.OnPlaybackTick"),
+                ("Context", "isaacsim.ros2.bridge.ROS2Context"),
+                ("ReadSimTime", "isaacsim.core.nodes.IsaacReadSimulationTime"),
+                ("PublishClock", "isaacsim.ros2.bridge.ROS2PublishClock"),
+            ],
+            keys.SET_VALUES: [
+                ("ReadSimTime.inputs:resetOnStop", False),
+                ("PublishClock.inputs:topicName", "/clock"),
+            ],
+            keys.CONNECT: [
+                ("OnPlaybackTick.outputs:tick", "PublishClock.inputs:execIn"),
+                ("Context.outputs:context", "PublishClock.inputs:context"),
+                ("ReadSimTime.outputs:simulationTime", "PublishClock.inputs:timeStamp"),
+            ],
+        },
+    )
+
+    domain_id = settings.get("ros2_domain_id")
+    if domain_id:
+        og.Controller.attribute(f"{graph_path}/Context.inputs:domain_id").set(int(domain_id))
+        og.Controller.attribute(f"{graph_path}/Context.inputs:useDomainIDEnvVar").set(False)
+
+
 def read_cmd_vel(subscribe_node_path: str) -> np.ndarray:
     """Reads the latest [vx, vy, wz] received on cmd_vel (0s if nothing has
     arrived yet -- ROS2SubscribeTwist holds its last received value between

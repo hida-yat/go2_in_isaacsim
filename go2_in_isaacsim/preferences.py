@@ -72,7 +72,8 @@ class Go2PolicyPreferences(PreferenceBuilder):
                 with ui.VStack(height=0, spacing=5):
                     ui.Label(
                         "Whether a Piper arm gets published depends on the loaded Robot USD above"
-                        " (pick 'Go2 with Mid-360 + Piper' there) -- these just name its topics.",
+                        " (pick 'Go2 with Mid-360 + Piper' there), or use the arm-only 'Piper Grasp"
+                        " Practice' example -- these just name its topics.",
                         word_wrap=True,
                         height=0,
                     )
@@ -84,11 +85,23 @@ class Go2PolicyPreferences(PreferenceBuilder):
                 with ui.VStack(height=0, spacing=5):
                     ui.Label(
                         "Whether a D435 gets published depends on the loaded Robot USD above"
-                        " (pick 'Go2 with Mid-360 + Piper' there) -- these just name its topics.",
+                        " (pick 'Go2 with Mid-360 + Piper' there), or use the arm-only 'Piper Grasp"
+                        " Practice' example -- these just name its topics.",
                         word_wrap=True,
                         height=0,
                     )
                     for key, label, tooltip in settings.REALSENSE_TEXT_FIELDS:
+                        self._build_text_row(key, label, tooltip)
+            with self.add_frame("Piper Grasp Practice"):
+                with ui.VStack(height=0, spacing=5):
+                    ui.Label(
+                        "Arm-only example (Isaac Examples > Manipulation > Piper Grasp Practice): Piper + D435"
+                        " fixed at the origin, no Go2, on a plain ground plane (Environment USD above is"
+                        " ignored). The ROS2/Piper/RealSense settings above apply to it too.",
+                        word_wrap=True,
+                        height=0,
+                    )
+                    for key, label, tooltip in settings.PIPER_PRACTICE_TEXT_FIELDS:
                         self._build_text_row(key, label, tooltip)
             ui.Spacer(height=ui.Fraction(1))
 
