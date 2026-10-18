@@ -82,7 +82,6 @@ def _read_existing_mount_transform():
 
 def main():
     _debug(f"mid360 module file: {mid360.__file__}")
-    _debug(f"create_sensor has orient fix: {'_SENSOR_ORIENT_FIX' in dir(mid360)}")
     mount_translate, mount_rotate_zyx = _read_existing_mount_transform()
     print(f"Mid360 mount transform: translate={mount_translate}  rotateZYX={mount_rotate_zyx}")
     _debug(f"Mid360 mount transform: translate={mount_translate}  rotateZYX={mount_rotate_zyx}")

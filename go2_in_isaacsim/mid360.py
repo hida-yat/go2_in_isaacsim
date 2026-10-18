@@ -29,7 +29,7 @@
 
 import omni.graph.core as og
 import omni.usd
-from pxr import Gf, Usd, UsdGeom
+from pxr import Usd, UsdGeom
 
 from . import settings
 
@@ -100,24 +100,19 @@ def is_available() -> bool:
         return False
 
 
-# The ray-cast results themselves (read directly via the
-# IsaacExtractRTXSensorPointCloud annotator) line up with local +X/+Z at
-# identity orientation, matching Isaac Sim's own bundled lidar assets -- but
-# what actually reaches ROS2/RViz goes through a *render product*
-# (IsaacCreateRenderProduct treats the sensor as a camera-like render
-# source, see ros2_bridge.py's publish_to_ros2), and that path apparently
-# uses a different native axis convention: confirmed by inspection in RViz
-# to be flipped 180deg about Y from the raw ray-cast convention. This offset
-# is therefore applied here, once, rather than compensated for per-mount.
-_SENSOR_ORIENT_FIX = Gf.Quatd(0.0, 0.0, 1.0, 0.0)  # 180deg about Y, (w, i, j, k)
+# No orientation offset is applied to the sensor prim: the OmniLidar's local
+# frame (+X forward, +Z up) is used as-is, and publish_to_ros2's TF is read
+# from that same prim. An earlier 180deg-about-Y "fix" here was really
+# compensating for _relative_transform() passing the TF quaternion in
+# (w, x, y, z) order instead of (x, y, z, w); once that was fixed, the extra
+# rotation left the sensor itself mounted upside down (rays cast -52..+7deg
+# instead of -7..+52deg, and the cloud flipped in RViz).
 
 
 def create_sensor(name: str, parent: str):
     """Creates the Mid-360 sensor prim (native OmniLidar, see module
     docstring) named `name` under `parent`, at that parent's local origin
-    plus _SENSOR_ORIENT_FIX (see its comment -- this is not a placement
-    choice, it corrects a fixed axis-convention mismatch between the raw
-    ray-cast output and what the ROS2/RViz-facing render product uses).
+    and orientation (the parent mount Xform carries the real mount tilt).
 
     Uses omni.replicator.core's functional API directly rather than the
     omni.kit.commands "IsaacSensorCreateRtxLidar" wrapper: that wrapper
@@ -129,10 +124,7 @@ def create_sensor(name: str, parent: str):
     """
     import omni.replicator.core as rep
 
-    prim = rep.functional.create.omni_lidar(name=name, parent=parent, **_mid360_attrs())
-    orient_op = UsdGeom.Xformable(prim).AddOrientOp(precision=UsdGeom.XformOp.PrecisionDouble)
-    orient_op.Set(_SENSOR_ORIENT_FIX)
-    return prim
+    return rep.functional.create.omni_lidar(name=name, parent=parent, **_mid360_attrs())
 
 
 def find_sensor(robot_prim_path: str):
