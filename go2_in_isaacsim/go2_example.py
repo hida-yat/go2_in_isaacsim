@@ -31,6 +31,9 @@ class Go2Example(BaseSample):
         # self.go2.robot.dof_names -- see piper.py.
         self._piper_present = False
         self._piper_hw_bridge = None
+        # mid360.PointCloudPublisher (plain rclpy + annotator, not an
+        # OmniGraph), so it has to be shut down explicitly in world_cleanup.
+        self._mid360_publisher = None
 
         # bindings for keyboard to command, same layout as the Spot example.
         # Magnitudes are kept inside this checkpoint's trained command ranges
@@ -81,7 +84,10 @@ class Go2Example(BaseSample):
             if sensor_prim is not None:
                 imu.publish_to_ros2(sensor_prim, self.go2.robot.prim_path, settings.get("ros2_chassis_frame"))
                 if mid360.is_available():
-                    mid360.publish_to_ros2(sensor_prim, self.go2.robot.prim_path, settings.get("ros2_chassis_frame"))
+                    self._shutdown_mid360_publisher()
+                    self._mid360_publisher = mid360.publish_to_ros2(
+                        sensor_prim, self.go2.robot.prim_path, settings.get("ros2_chassis_frame")
+                    )
                 else:
                     carb.log_warn(
                         "Go2 Policy Example: this Robot USD has a Mid-360 lidar but "
@@ -168,8 +174,14 @@ class Go2Example(BaseSample):
         if not self.get_world().physics_callback_exists("physics_step"):
             self.get_world().add_physics_callback("physics_step", callback_fn=self.on_physics_step)
 
+    def _shutdown_mid360_publisher(self) -> None:
+        if self._mid360_publisher is not None:
+            self._mid360_publisher.shutdown()
+            self._mid360_publisher = None
+
     def world_cleanup(self):
         self._event_timer_callback = None
+        self._shutdown_mid360_publisher()
         if self._piper_hw_bridge is not None:
             self._piper_hw_bridge.shutdown()
             self._piper_hw_bridge = None

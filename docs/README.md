@@ -158,6 +158,26 @@ transform in the USD -- not a guessed offset -- so it's always correct regardles
 of which Robot USD (or mount position) is loaded. If the loaded Robot USD has no
 Mid-360 (e.g. bare `go2.usd`), this is silently skipped.
 
+Each message is one full 10 Hz rotation (cut at azimuth ±180°, behind the
+sensor) with the fields `x, y, z, intensity, time, ring` -- the Velodyne
+`PointXYZIRT` layout, so FAST-LIO / Point-LIO can read it with their Velodyne
+preprocessing (`lidar_type: 2`, `scan_line: 40`, `timestamp_unit: 0`, i.e.
+seconds):
+
+- `header.stamp` is the scan's first point's simulation time (same clock as
+  the TF/odom/IMU stamps); `time` is each point's offset from it.
+- `time` advances in whole render frames (0, 40, 80 ms at this example's
+  25 Hz rendering), not continuously: Isaac Sim casts each frame's share of
+  the rotation against a single snapshot of the scene and sensor pose, so that
+  is when those points were really measured.
+- `ring` is the channel, 0 (-7°) to 39 (+52°); `intensity` is 0-255.
+
+This is built in Python by `mid360.PointCloudPublisher` rather than Isaac Sim's
+own `ROS2RtxLidarHelper`, whose PointCloud2 has only `x, y, z` and is sent once
+per render frame (a partial rotation). If the simulation runs faster than the
+renderer can keep up with, the RTX lidar occasionally loses a render frame's
+share of a rotation, and that scan has a 144° gap.
+
 ## Mid-360 IMU
 
 Loading **Go2 with Mid-360** with **Enable ROS2 Bridge** creates a native
